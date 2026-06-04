@@ -145,7 +145,7 @@ class AndroidSettingsTile extends StatelessWidget {
                     onPressed?.call(context);
                   }
                 },
-          highlightColor: Theme.of(context).listTileTheme.selectedColor,
+          highlightColor: Theme.of(context).colorScheme.primary.withAlpha(20),
           child: Row(
             children: [
               if (leading != null)
@@ -154,7 +154,7 @@ class AndroidSettingsTile extends StatelessWidget {
                   child: IconTheme(
                     data: IconTheme.of(context).copyWith(
                       color: enabled
-                          ? Theme.of(context).iconTheme.color
+                          ? Theme.of(context).colorScheme.primary
                           : Theme.of(context).disabledColor,
                     ),
                     child: leading!,
@@ -249,7 +249,7 @@ class AndroidSettingsTile extends StatelessWidget {
                       Icon(
                         Icons.chevron_right_sharp,
                         color: enabled
-                            ? Theme.of(context).iconTheme.color
+                            ? Theme.of(context).colorScheme.primary
                             : Theme.of(context).disabledColor,
                       ),
                 )

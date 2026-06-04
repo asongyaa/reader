@@ -1,11 +1,8 @@
 import 'package:anx_reader/l10n/generated/L10n.dart';
 import 'package:anx_reader/enums/lang_list.dart';
 import 'package:anx_reader/main.dart';
-import 'package:anx_reader/service/ai/prompt_generate.dart';
-import 'package:anx_reader/service/ai/index.dart';
 import 'package:anx_reader/service/config/config_item.dart';
 import 'package:anx_reader/service/translate/index.dart';
-import 'package:anx_reader/widgets/ai/ai_stream.dart';
 import 'package:flutter/material.dart';
 
 class AiTranslateProvider extends TranslateServiceProvider {
@@ -28,23 +25,7 @@ class AiTranslateProvider extends TranslateServiceProvider {
     String? contextText,
     bool isFullText = false,
   }) {
-    final prompt = isFullText
-        ? generatePromptFullTextTranslate(
-            text,
-            mapLanguageCode(to),
-            mapLanguageCode(from),
-          )
-        : generatePromptTranslate(
-            text,
-            mapLanguageCode(to),
-            mapLanguageCode(from),
-            contextText: contextText,
-          );
-
-    return AiStream(
-      prompt: prompt,
-      regenerate: true,
-    );
+    return Text(L10n.of(navigatorKey.currentContext!).translateError);
   }
 
   @override
@@ -55,29 +36,7 @@ class AiTranslateProvider extends TranslateServiceProvider {
     String? contextText,
     bool isFullText = false,
   }) async* {
-    try {
-      final payload = isFullText
-          ? generatePromptFullTextTranslate(
-              text,
-              mapLanguageCode(to),
-              mapLanguageCode(from),
-            )
-          : generatePromptTranslate(
-              text,
-              mapLanguageCode(to),
-              mapLanguageCode(from),
-              contextText: contextText,
-            );
-
-      final messages = payload.buildMessages();
-
-      await for (final result
-          in aiGenerateStream(messages, regenerate: false)) {
-        yield result;
-      }
-    } catch (e) {
-      yield L10n.of(navigatorKey.currentContext!).translateError + e.toString();
-    }
+    yield L10n.of(navigatorKey.currentContext!).translateError;
   }
 
   @override

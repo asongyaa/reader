@@ -7,7 +7,6 @@ import 'package:anx_reader/widgets/context_menu/excerpt_menu.dart';
 import 'package:anx_reader/widgets/context_menu/reader_note_menu.dart';
 import 'package:anx_reader/widgets/context_menu/translation_menu.dart';
 import 'package:flutter/material.dart';
-import 'package:pointer_interceptor/pointer_interceptor.dart';
 
 import 'package:anx_reader/dao/book_note.dart';
 import 'package:anx_reader/models/book_note.dart';
@@ -482,8 +481,7 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay>
     return Positioned(
       left: _position.dx,
       top: _position.dy,
-      child: PointerInterceptor(
-        child: Stack(
+      child: Stack(
           children: [
             GestureDetector(
               onTap: widget.onClose,
@@ -564,7 +562,6 @@ class _ContextMenuOverlayState extends State<_ContextMenuOverlay>
             ),
           ],
         ),
-      ),
     );
   }
 }

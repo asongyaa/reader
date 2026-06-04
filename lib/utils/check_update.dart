@@ -5,7 +5,6 @@ import 'package:anx_reader/utils/app_version.dart';
 import 'package:anx_reader/utils/env_var.dart';
 import 'package:anx_reader/utils/log/common.dart';
 import 'package:anx_reader/utils/toast/common.dart';
-import 'package:anx_reader/widgets/markdown/styled_markdown.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -69,8 +68,7 @@ Future<void> checkUpdate(bool manualCheck) async {
                 fontWeight: FontWeight.bold,
               )),
           content: SingleChildScrollView(
-            child: StyledMarkdown(
-                data: '''### ${L10n.of(context).updateNewVersion} $newVersion\n
+            child: Text('''### ${L10n.of(context).updateNewVersion} $newVersion\n
 ${L10n.of(context).updateCurrentVersion} $currentVersion\n
 $body'''),
           ),

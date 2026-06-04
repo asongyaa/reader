@@ -122,7 +122,7 @@ class _BookFolderState extends ConsumerState<BookFolder> {
                           width: 1,
                         ),
                       ),
-                      child: BookCover(book: book),
+                      child: BookCover(book: book, height: 150),
                     ),
                   ),
                 );
@@ -153,7 +153,7 @@ class _BookFolderState extends ConsumerState<BookFolder> {
                   return SizedBox.shrink();
                 }
                 final book = previewBooks[index];
-                return BookCover(book: book);
+                return BookCover(book: book, width: 80, height: 110);
               },
             ),
           );
@@ -181,9 +181,9 @@ class _BookFolderState extends ConsumerState<BookFolder> {
                 height: 50,
                 child: Text(
                   groupName,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),

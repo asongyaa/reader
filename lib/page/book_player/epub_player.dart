@@ -51,7 +51,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icons_plus/icons_plus.dart';
-import 'package:pointer_interceptor/pointer_interceptor.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'minute_clock.dart';
@@ -1237,13 +1236,6 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
       child: Stack(
         children: [
           webView,
-          Positioned.fill(
-            child: PointerInterceptor(
-              intercepting: !_isTopOfNavigationStack,
-              debug: false,
-              child: const SizedBox.expand(),
-            ),
-          ),
         ],
       ),
     );
@@ -1271,7 +1263,7 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
                   child: IgnorePointer(
                 ignoring: true,
                 child: FadeTransition(
-                    opacity: _animation!, child: BookCover(book: widget.book)),
+                    opacity: _animation!, child: BookCover(book: widget.book, height: 60)),
               )),
           ],
         ),

@@ -8,7 +8,6 @@ import 'package:anx_reader/utils/env_var.dart';
 import 'package:anx_reader/utils/toast/common.dart';
 import 'package:anx_reader/widgets/settings/link_icon.dart';
 import 'package:anx_reader/utils/check_update.dart';
-import 'package:anx_reader/widgets/settings/show_donate_dialog.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -138,13 +137,6 @@ Future<void> openAboutDialog() async {
                   ListTile(
                       title: Text(L10n.of(context).aboutCheckForUpdates),
                       onTap: () => checkUpdate(true)),
-                if (EnvVar.enableDonation)
-                  ListTile(
-                    title: Text(L10n.of(context).appDonate),
-                    onTap: () {
-                      showDonateDialog(context);
-                    },
-                  ),
                 ListTile(
                   title: Text(L10n.of(context).appLicense),
                   onTap: () {

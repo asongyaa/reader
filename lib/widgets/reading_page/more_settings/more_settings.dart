@@ -6,7 +6,7 @@ import 'package:anx_reader/widgets/reading_page/more_settings/reading_settings.d
 import 'package:anx_reader/widgets/reading_page/more_settings/style_settings.dart';
 import 'package:contentsize_tabbarview/contentsize_tabbarview.dart';
 import 'package:flutter/material.dart';
-import 'package:pointer_interceptor/pointer_interceptor.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 
 enum ReadingSettings { theme, style }
 
@@ -37,8 +37,7 @@ void showMoreSettings(ReadingSettings settings) {
     context: context,
     builder: (context) {
       return Dialog(
-        child: PointerInterceptor(
-          child: Container(
+        child: Container(
             constraints: const BoxConstraints(maxWidth: 600),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -62,9 +61,15 @@ void showMoreSettings(ReadingSettings settings) {
                   ),
                 ),
               ],
+            ).animate().slideY(
+              begin: 0.08,
+              duration: 350.ms,
+              curve: Curves.easeOut,
+            ).fadeIn(
+              duration: 300.ms,
+              curve: Curves.easeOut,
             ),
           ),
-        ),
       );
     },
   );

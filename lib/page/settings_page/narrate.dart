@@ -14,7 +14,11 @@ import 'package:anx_reader/widgets/common/container/filled_container.dart';
 import 'package:anx_reader/widgets/settings/service_config_form.dart';
 import 'package:anx_reader/widgets/settings/settings_section.dart';
 import 'package:anx_reader/widgets/settings/settings_tile.dart';
+import 'package:anx_reader/service/tts/offline_tts_model_manager.dart';
+import 'package:anx_reader/service/tts/tts_engine.dart';
+import 'package:anx_reader/service/tts/tts_engine_adapter.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -73,6 +77,10 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
         } else {
           await tts.speak(content: text);
         }
+      } else if (tts is TtsEngineAdapter) {
+        // New TTS engine architecture — TtsEngineAdapter wraps the actual engine
+        await tts.init(() {}, () async => text, () async => text);
+        await tts.speak(content: text);
       }
     } catch (e) {
       AnxLog.severe('TTS Test Speak Error: $e');
@@ -345,6 +353,56 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
       controller: _scrollController,
       padding: const EdgeInsets.only(bottom: 50.0), // Add padding for bottom
       children: [
+        // --- TTS Engine Selection ---
+        SettingsSection(
+          title: Text(L10n.of(context).ttsType),
+          tiles: [
+            CustomSettingsTile(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0, vertical: 8.0),
+                child: SegmentedButton<TtsEngineTypeEnum>(
+                  segments: [
+                    ButtonSegment(
+                      value: TtsEngineTypeEnum.system,
+                      label: Text(TtsEngineTypeEnum.system.label),
+                      icon: const Icon(Icons.volume_up),
+                    ),
+                    ButtonSegment(
+                      value: TtsEngineTypeEnum.sherpaOnnx,
+                      label: Text(TtsEngineTypeEnum.sherpaOnnx.label),
+                      icon: const Icon(Icons.wifi_off),
+                    ),
+                  ],
+                  selected: {ref.watch(ttsEngineTypeProvider)},
+                  onSelectionChanged:
+                      (Set<TtsEngineTypeEnum> selected) {
+                    ref
+                        .read(ttsEngineTypeProvider.notifier)
+                        .setEngine(selected.first);
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+        // --- Offline Model Management ---
+        if (ref.watch(ttsEngineTypeProvider) ==
+            TtsEngineTypeEnum.sherpaOnnx)
+          SettingsSection(
+            title: const Text('Offline Model'),
+            tiles: [
+              CustomSettingsTile(
+                child: _ModelDownloadCard(),
+              ),
+            ],
+          ).animate().fadeIn(
+              duration: 300.ms,
+              curve: Curves.easeOut).slideY(
+              begin: -0.1,
+              duration: 300.ms,
+              curve: Curves.easeOut),
+
         SettingsSection(
           title: Text(L10n.of(context).settingsNarrateTtsService),
           tiles: [
@@ -384,12 +442,13 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
                             setState(() {
                               _showVoiceList = true;
                             });
+                            final currentLocale =
+                                Localizations.localeOf(context);
                             final voices =
                                 await ref.refresh(ttsVoicesProvider.future);
                             if (selectedVoiceModel == null &&
                                 voices.isNotEmpty) {
-                              final currentLocale =
-                                  Localizations.localeOf(context);
+
                               final currentLangCode =
                                   currentLocale.languageCode;
 
@@ -764,5 +823,296 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
     }
 
     return voiceModelList;
+  }
+}
+
+/// Card widget for managing offline TTS model download/delete/status.
+class _ModelDownloadCard extends StatefulWidget {
+  @override
+  State<_ModelDownloadCard> createState() => _ModelDownloadCardState();
+}
+
+class _ModelDownloadCardState extends State<_ModelDownloadCard> {
+  final OfflineTtsModelManager _modelManager = OfflineTtsModelManager();
+  bool? _isDownloaded;
+  bool _isDownloading = false;
+  double _downloadProgress = 0.0;
+  bool _isImporting = false;
+  double _importProgress = 0.0;
+  String _importStatus = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _checkModelStatus();
+  }
+
+  Future<void> _checkModelStatus() async {
+    final downloaded = await _modelManager.isModelDownloaded();
+    if (mounted) {
+      setState(() {
+        _isDownloaded = downloaded;
+      });
+    }
+  }
+
+  Future<void> _startDownload() async {
+    setState(() {
+      _isDownloading = true;
+      _downloadProgress = 0.0;
+    });
+
+    try {
+      await _modelManager.downloadModel(
+        type: TtsModelType.vitsMeloZhEn,
+        onProgress: (progress) {
+          if (mounted) {
+            setState(() {
+              _downloadProgress = progress;
+            });
+          }
+        },
+      );
+      if (mounted) {
+        setState(() {
+          _isDownloading = false;
+          _isDownloaded = true;
+          _downloadProgress = 1.0;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isDownloading = false;
+        });
+        SmartDialog.show(
+          useSystem: true,
+          animationType: SmartAnimationType.centerFade_otherSlide,
+          builder: (dialogContext) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.error,
+                    color: Theme.of(dialogContext).colorScheme.error),
+                const SizedBox(width: 8),
+                const Text('Download Failed'),
+              ],
+            ),
+            content: Text('$e'),
+            actions: [
+              TextButton(
+                onPressed: () => SmartDialog.dismiss(),
+                child: Text(L10n.of(dialogContext).commonOk),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _importFromFile() async {
+    setState(() {
+      _isImporting = true;
+      _importProgress = 0.0;
+      _importStatus = '正在读取文件...';
+    });
+
+    try {
+      await _modelManager.importFromFile(
+        type: TtsModelType.vitsAishell3,
+        onProgress: (progress) {
+          if (mounted) {
+            setState(() { _importProgress = progress; });
+          }
+        },
+        onStatus: (msg) {
+          if (mounted) {
+            setState(() { _importStatus = msg; });
+          }
+        },
+      );
+
+      // Validate the imported model
+      final isValid = await _modelManager.isModelDownloaded(TtsModelType.vitsAishell3);
+      if (mounted) {
+        setState(() {
+          _isImporting = false;
+          _isDownloaded = isValid;
+        });
+        if (isValid) {
+          SmartDialog.show(
+            useSystem: true,
+            animationType: SmartAnimationType.centerFade_otherSlide,
+            builder: (dialogContext) => AlertDialog(
+              title: Row(children: [
+                Icon(Icons.check_circle, color: Colors.green),
+                const SizedBox(width: 8),
+                const Text('导入成功'),
+              ]),
+              content: const Text('离线语音模型已就绪，即可开始使用。'),
+              actions: [
+                TextButton(
+                  onPressed: () => SmartDialog.dismiss(),
+                  child: Text(L10n.of(dialogContext).commonOk),
+                ),
+              ],
+            ),
+          );
+        } else {
+          SmartDialog.show(
+            useSystem: true,
+            animationType: SmartAnimationType.centerFade_otherSlide,
+            builder: (dialogContext) => AlertDialog(
+              title: Row(children: [
+                Icon(Icons.error, color: Theme.of(dialogContext).colorScheme.error),
+                const SizedBox(width: 8),
+                const Text('文件异常'),
+              ]),
+              content: const Text('模型文件不完整，缺少 model.onnx 或 tokens.txt，请检查后重新导入。'),
+              actions: [
+                TextButton(
+                  onPressed: () => SmartDialog.dismiss(),
+                  child: Text(L10n.of(dialogContext).commonOk),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() { _isImporting = false; });
+        SmartDialog.show(
+          useSystem: true,
+          animationType: SmartAnimationType.centerFade_otherSlide,
+          builder: (dialogContext) => AlertDialog(
+            title: Row(children: [
+              Icon(Icons.error, color: Theme.of(dialogContext).colorScheme.error),
+              const SizedBox(width: 8),
+              const Text('导入失败'),
+            ]),
+            content: Text('$e'),
+            actions: [
+              TextButton(
+                onPressed: () => SmartDialog.dismiss(),
+                child: Text(L10n.of(dialogContext).commonOk),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteModel() async {
+    await _modelManager.deleteModel();
+    if (mounted) {
+      setState(() {
+        _isDownloaded = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isDownloaded == null) {
+      return const Padding(
+        padding: EdgeInsets.all(16.0),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Status header
+          Row(
+            children: [
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: Icon(
+                  _isDownloaded!
+                      ? Icons.check_circle
+                      : Icons.cloud_download,
+                  key: ValueKey('model_icon_$_isDownloaded'),
+                  color: _isDownloaded!
+                      ? Colors.green
+                      : colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _isDownloaded! ? 'Model Ready' : 'Offline TTS Model',
+                style: theme.textTheme.titleSmall,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Description or progress bar
+          if (_isDownloading || _isImporting) ...[
+            const SizedBox(height: 12),
+            if (_isImporting) ...[
+              Text(_importStatus, style: theme.textTheme.bodySmall),
+              const SizedBox(height: 8),
+            ],
+            LinearProgressIndicator(value: _isDownloading ? _downloadProgress : _importProgress),
+            const SizedBox(height: 8),
+            Text(
+              _isDownloading
+                  ? '${(_downloadProgress * 100).toStringAsFixed(0)}%'
+                  : '${(_importProgress * 100).toStringAsFixed(0)}%',
+              style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.primary, fontWeight: FontWeight.bold),
+            ),
+          ] else ...[
+            const SizedBox(height: 12),
+            Text(
+              _isDownloaded!
+                  ? '离线语音模型已安装'
+                  : '下载或导入 ~160MB 离线语音模型，\n即可开始使用离线 TTS。',
+              style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+            ),
+          ],
+          const SizedBox(height: 16),
+          // Action buttons
+          if (!_isDownloading && !_isImporting)
+            Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _isDownloaded!
+                    ? [
+                        AnxButton(
+                          type: AnxButtonType.outlined,
+                          onPressed: _deleteModel,
+                          child: const Text('删除模型'),
+                        ),
+                      ]
+                    : [
+                        AnxButton(
+                          onPressed: _startDownload,
+                          child: const Text('下载'),
+                        ),
+                        AnxButton(
+                          type: AnxButtonType.outlined,
+                          onPressed: _importFromFile,
+                          child: const Text('从文件导入'),
+                        ),
+                      ],
+              ),
+            ),
+          if (_isImporting)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text('导入中请勿离开页面...', style: TextStyle(fontSize: 12)),
+            ),
+        ],
+      ),
+    );
   }
 }

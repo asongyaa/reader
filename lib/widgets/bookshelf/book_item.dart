@@ -7,6 +7,7 @@ import 'package:anx_reader/widgets/bookshelf/book_bottom_sheet.dart';
 import 'package:anx_reader/widgets/bookshelf/book_cover.dart';
 import 'package:anx_reader/widgets/bookshelf/book_sync_status_icon.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class BookItem extends ConsumerWidget {
@@ -68,7 +69,10 @@ class BookItem extends ConsumerWidget {
                   boxShadow: [
                     if (!Prefs().eInkMode)
                       BoxShadow(
-                        color: Colors.grey.withAlpha(100),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .shadow
+                            .withAlpha(30),
                         spreadRadius: 5,
                         blurRadius: 10,
                         offset: const Offset(0, 2),
@@ -78,7 +82,7 @@ class BookItem extends ConsumerWidget {
                 child: Row(
                   children: [
                     Expanded(
-                      child: BookCover(book: book),
+                      child: BookCover(book: book, height: 150),
                     ),
                   ],
                 ),
@@ -98,10 +102,10 @@ class BookItem extends ConsumerWidget {
                         book.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                        ),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
                       ),
                     ),
                     if (Prefs().webdavStatus)
@@ -119,18 +123,20 @@ class BookItem extends ConsumerWidget {
                     Expanded(
                       child: Text(
                         book.author,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w300,
-                            fontSize: 9,
-                            overflow: TextOverflow.ellipsis),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w300,
+                              fontSize: 9,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                       ),
                     ),
                     Text(
                       '${(book.readingPercentage * 100).toStringAsFixed(0)}%',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w300,
-                          fontSize: 9,
-                          overflow: TextOverflow.ellipsis),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w300,
+                            fontSize: 9,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                     ),
                   ],
                 ),
@@ -138,7 +144,15 @@ class BookItem extends ConsumerWidget {
             ),
           ),
         ],
-      ),
+      ).animate().fadeIn(
+            duration: 400.ms,
+            curve: Curves.easeOut,
+          ).slideY(
+            begin: 0.1,
+            end: 0,
+            duration: 400.ms,
+            curve: Curves.easeOut,
+          ),
     );
   }
 }

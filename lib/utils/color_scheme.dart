@@ -19,9 +19,9 @@ ThemeData colorSchema(
   final isDark = brightness == Brightness.dark;
   final isEinkMode = prefsNotifier.eInkMode;
 
-  final lightGropedBackground = const Color(0xFFF2F2F7);
+  final lightGropedBackground = const Color(0xFFFCF9F4);
   final darkGropedBackground =
-      prefsNotifier.trueDarkMode ? Color(0xFF000000) : Color(0xFF1C1C1E);
+      prefsNotifier.trueDarkMode ? Color(0xFF000000) : const Color(0xFF121212);
   final gropedBackgroundColor = isEinkMode
       ? Colors.white
       : isDark
@@ -51,7 +51,7 @@ ThemeData colorSchema(
           Brightness.dark => ColorScheme.fromSeed(
               seedColor: seedColor,
               brightness: Brightness.dark,
-              surfaceContainer: Color(0xFF2C2C2E),
+              surfaceContainer: const Color(0xFF1E1E1E),
               surface: darkGropedBackground,
             ),
         };

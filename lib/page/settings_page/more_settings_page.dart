@@ -1,6 +1,5 @@
 import 'package:anx_reader/config/shared_preference_provider.dart';
 import 'package:anx_reader/l10n/generated/L10n.dart';
-import 'package:anx_reader/page/settings_page/ai.dart';
 import 'package:anx_reader/page/settings_page/advanced.dart';
 import 'package:anx_reader/page/settings_page/appearance.dart';
 import 'package:anx_reader/page/settings_page/developer/developer_options_page.dart';
@@ -10,7 +9,6 @@ import 'package:anx_reader/page/settings_page/settings_page.dart';
 import 'package:anx_reader/page/settings_page/storege.dart';
 import 'package:anx_reader/page/settings_page/sync.dart';
 import 'package:anx_reader/page/settings_page/translate.dart';
-import 'package:anx_reader/utils/env_var.dart';
 import 'package:anx_reader/widgets/settings/about.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -22,9 +20,11 @@ class MoreSettings extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: const Icon(Icons.settings_outlined),
+      leading: Icon(Icons.settings_outlined,
+          color: Theme.of(context).colorScheme.primary),
       title: Text(L10n.of(context).settingsMoreSettings),
-      trailing: const Icon(Icons.chevron_right),
+      trailing: Icon(Icons.chevron_right,
+          color: Theme.of(context).colorScheme.primary),
       onTap: () {
         Navigator.push(
           context,
@@ -118,16 +118,6 @@ class _SubMoreSettingsState extends State<SubMoreSettings> {
                   L10n.of(context).settingsTranslate,
                 ],
               },
-              if (EnvVar.enableAIFeature)
-                {
-                  "title": L10n.of(context).settingsAi,
-                  "icon": Icons.auto_awesome,
-                  "sections": const AISettings(),
-                  "subtitles": [
-                    L10n.of(context).settingsAiServices,
-                    L10n.of(context).settingsAiPrompt,
-                  ],
-                },
               {
                 "title": L10n.of(context).storage,
                 "icon": Icons.storage_outlined,

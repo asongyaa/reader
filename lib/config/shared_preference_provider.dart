@@ -34,7 +34,6 @@ import 'package:anx_reader/models/reading_rules.dart';
 import 'package:anx_reader/models/user_prompt.dart';
 import 'package:anx_reader/widgets/statistic/dashboard_tiles/dashboard_tile_registry.dart';
 import 'package:anx_reader/models/window_info.dart';
-import 'package:anx_reader/service/ai/tools/ai_tool_registry.dart';
 import 'package:anx_reader/service/translate/index.dart';
 import 'package:anx_reader/utils/get_current_language_code.dart';
 import 'package:anx_reader/utils/log/common.dart';
@@ -169,7 +168,7 @@ class Prefs extends ChangeNotifier {
   }
 
   Color get themeColor {
-    int colorValue = prefs.getInt('themeColor') ?? Colors.blue.value;
+    int colorValue = prefs.getInt('themeColor') ?? Colors.deepOrange.value;
     return Color(colorValue);
   }
 
@@ -502,6 +501,15 @@ class Prefs extends ChangeNotifier {
       if (online != null) return online;
     }
     return 'system';
+  }
+
+  set ttsEngineType(String type) {
+    prefs.setString('ttsEngineType', type);
+    notifyListeners();
+  }
+
+  String get ttsEngineType {
+    return prefs.getString('ttsEngineType') ?? 'system';
   }
 
   Map<String, dynamic> getOnlineTtsConfig(String serviceId) {
@@ -900,23 +908,13 @@ class Prefs extends ChangeNotifier {
   List<String> get enabledAiToolIds {
     final stored = prefs.getStringList(_enabledAiToolsKey);
     if (stored == null) {
-      return AiToolRegistry.defaultEnabledToolIds();
-    }
-    if (stored.isEmpty) {
       return const [];
     }
-    final sanitized = AiToolRegistry.sanitizeIds(stored);
-    if (sanitized.isEmpty && stored.isNotEmpty) {
-      return AiToolRegistry.defaultEnabledToolIds();
-    }
-    return sanitized;
+    return stored;
   }
 
   set enabledAiToolIds(List<String> ids) {
-    prefs.setStringList(
-      _enabledAiToolsKey,
-      AiToolRegistry.sanitizeIds(ids),
-    );
+    prefs.setStringList(_enabledAiToolsKey, ids);
     notifyListeners();
   }
 

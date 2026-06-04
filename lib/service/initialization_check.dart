@@ -3,7 +3,6 @@ import 'package:anx_reader/enums/version_check_type.dart';
 import 'package:anx_reader/main.dart';
 import 'package:anx_reader/utils/app_version.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:anx_reader/page/onboarding_screen.dart';
 import 'package:anx_reader/page/changelog_screen.dart';
 import 'package:anx_reader/utils/log/common.dart';
 import 'package:flutter/material.dart';
@@ -53,22 +52,10 @@ class InitializationCheck {
   }
 
   static Future<void> _handleFirstLaunch() async {
-    AnxLog.info('First launch detected, showing onboarding');
+    AnxLog.info('First launch detected, saving current version');
     final cv = await currentVersion;
-    // wait 0.8 seconds to ensure the app is ready
-    Future.delayed(const Duration(milliseconds: 800), () {
-      showCupertinoSheet(
-        context: navigatorKey.currentContext!,
-        builder: (context) => Scaffold(
-          body: OnboardingScreen(
-            onComplete: () async {
-              Prefs().lastAppVersion = cv;
-              Navigator.pop(context);
-            },
-          ),
-        ),
-      );
-    });
+    Prefs().lastAppVersion = cv;
+    _handleNormalStartup();
   }
 
   static Future<void> _handleUpdateAvailable() async {

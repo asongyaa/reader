@@ -1,6 +1,5 @@
 import 'package:anx_reader/l10n/generated/L10n.dart';
 import 'package:anx_reader/utils/get_current_language_code.dart';
-import 'package:anx_reader/widgets/markdown/styled_markdown.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:anx_reader/utils/log/common.dart';
@@ -181,7 +180,7 @@ class _ChangelogScreenState extends State<ChangelogScreen> {
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(16),
-                    child: StyledMarkdown(data: _changelogContent),
+                    child: Text(_changelogContent),
                   ),
                 ),
                 Container(

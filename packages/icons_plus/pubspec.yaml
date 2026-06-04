@@ -1,0 +1,58 @@
+name: icons_plus
+version: 5.0.0-patched
+description: Patched version for Flutter 3.44 compatibility
+environment:
+  sdk: ">=2.16.1 <4.0.0"
+  flutter: ">=1.17.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  fonts:
+    - family: AntDesign
+      fonts:
+        - asset: assets/fonts/AntDesign.ttf
+    - family: Bootstrap
+      fonts:
+        - asset: assets/fonts/Bootstrap.ttf
+    - family: BoxIcons
+      fonts:
+        - asset: assets/fonts/BoxIcons.ttf
+    - family: Clarity
+      fonts:
+        - asset: assets/fonts/Clarity.ttf
+    - family: EvaIcons
+      fonts:
+        - asset: assets/fonts/EvaIcons.ttf
+    - family: FontAwesome
+      fonts:
+        - asset: assets/fonts/FontAwesome.ttf
+    - family: HeroIcons
+      fonts:
+        - asset: assets/fonts/HeroIcons.ttf
+    - family: Iconsax
+      fonts:
+        - asset: assets/fonts/Iconsax.ttf
+    - family: IonIcons
+      fonts:
+        - asset: assets/fonts/IonIcons.ttf
+    - family: LineAwesome
+      fonts:
+        - asset: assets/fonts/LineAwesome.ttf
+    - family: MingCute
+      fonts:
+        - asset: assets/fonts/MingCute.ttf
+    - family: OctIcons
+      fonts:
+        - asset: assets/fonts/OctIcons.ttf
+    - family: PixelartIcons
+      fonts:
+        - asset: assets/fonts/PixelArtIcons.ttf
+    - family: TeenyIcons
+      fonts:
+        - asset: assets/fonts/TeenyIcons.ttf
+    - family: ZondIcons
+      fonts:
+        - asset: assets/fonts/ZondIcons.ttf

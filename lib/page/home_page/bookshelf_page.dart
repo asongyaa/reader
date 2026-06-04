@@ -1,675 +1,374 @@
 import 'dart:io';
-import 'dart:math';
 
 import 'package:anx_reader/config/shared_preference_provider.dart';
-import 'package:anx_reader/enums/hint_key.dart';
-import 'package:anx_reader/enums/sort_field.dart';
-import 'package:anx_reader/enums/sort_order.dart';
 import 'package:anx_reader/l10n/generated/L10n.dart';
-import 'package:anx_reader/main.dart';
 import 'package:anx_reader/models/book.dart';
-import 'package:anx_reader/models/tag.dart';
 import 'package:anx_reader/providers/book_list.dart';
-import 'package:anx_reader/providers/book_filters.dart';
-import 'package:anx_reader/providers/tags.dart';
 import 'package:anx_reader/service/book.dart';
 import 'package:anx_reader/page/search/search_page.dart';
 import 'package:anx_reader/utils/get_path/get_temp_dir.dart';
-import 'package:anx_reader/utils/color/hash_color.dart';
 import 'package:anx_reader/utils/platform_utils.dart';
 import 'package:anx_reader/utils/log/common.dart';
-import 'package:anx_reader/widgets/bookshelf/book_bottom_sheet.dart';
-import 'package:anx_reader/widgets/bookshelf/book_folder.dart';
-import 'package:anx_reader/widgets/bookshelf/sync_button.dart';
+import 'package:anx_reader/widgets/bookshelf/book_cover.dart';
 import 'package:anx_reader/widgets/common/container/filled_container.dart';
-import 'package:anx_reader/widgets/common/tag_chip.dart';
-import 'package:anx_reader/widgets/hint/hint_banner.dart';
-import 'package:anx_reader/widgets/common/anx_segmented_button.dart';
 import 'package:anx_reader/widgets/tips/bookshelf_tips.dart';
-import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_reorderable_grid_view/widgets/custom_draggable.dart';
-import 'package:flutter_reorderable_grid_view/widgets/reorderable_builder.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:icons_plus/icons_plus.dart';
 import 'package:path/path.dart' as p;
 
+// ── Category mode enum ───────────────────────────────────────────
+enum _CategoryMode {
+  allBooks, format, author, collection, progress,
+}
+
+extension _CategoryModeExt on _CategoryMode {
+  String get label => switch (this) {
+    _CategoryMode.allBooks   => '全部书籍',
+    _CategoryMode.format     => '格式',
+    _CategoryMode.author     => '作者',
+    _CategoryMode.collection => '合集',
+    _CategoryMode.progress   => '阅读进度',
+  };
+  IconData get icon => switch (this) {
+    _CategoryMode.allBooks   => Icons.library_books,
+    _CategoryMode.format     => Icons.description,
+    _CategoryMode.author     => Icons.person,
+    _CategoryMode.collection => Icons.folder,
+    _CategoryMode.progress   => Icons.trending_up,
+  };
+}
+
+// ── Widget ────────────────────────────────────────────────────────
 class BookshelfPage extends ConsumerStatefulWidget {
   const BookshelfPage({super.key, this.controller});
   final ScrollController? controller;
-
-  @override
-  ConsumerState<BookshelfPage> createState() => BookshelfPageState();
+  @override ConsumerState<BookshelfPage> createState() => BookshelfPageState();
 }
 
 class BookshelfPageState extends ConsumerState<BookshelfPage>
     with AutomaticKeepAliveClientMixin {
   late final _scrollController = widget.controller ?? ScrollController();
-  final _gridViewKey = GlobalKey();
-  bool _dragging = false;
-  final GlobalKey _tagButtonKey = GlobalKey();
-  final TextEditingController _editTagController = TextEditingController();
+  _CategoryMode _currentCategory = _CategoryMode.allBooks;
 
-  @override
-  bool get wantKeepAlive => true;
+  @override bool get wantKeepAlive => true;
 
-  @override
-  void dispose() {
-    _editTagController.dispose();
-    super.dispose();
+  // ── Helpers ──────────────────────────────────────────────────────
+  String _getFormat(String path) {
+    final ext = path.split('.').last.toLowerCase();
+    if (ext == 'epub') return 'EPUB';
+    if (ext == 'pdf')  return 'PDF';
+    if (ext == 'txt' || ext == 'text') return 'TXT';
+    if (ext == 'mobi') return 'MOBI';
+    if (ext == 'azw3') return 'AZW3';
+    if (ext == 'djvu') return 'DJVU';
+    if (ext == 'cbz' || ext == 'cbr') return 'COMIC';
+    return 'OTHER';
   }
 
-  Future<File> _copyToTempFile({
-    required String sourcePath,
-    required String fileName,
-  }) async {
-    final tempDir = await getAnxTempDir();
-    final targetPath = p.join(tempDir.path, fileName);
-    final targetFile = File(targetPath);
-    if (await targetFile.exists()) {
-      await targetFile.delete();
-    }
-    return File(sourcePath).copy(targetPath);
+  Future<File> _copyToTempFile({required String src, required String name}) async {
+    final tmp = await getAnxTempDir();
+    final target = File(p.join(tmp.path, name));
+    if (await target.exists()) await target.delete();
+    return File(src).copy(target.path);
   }
 
   Future<void> _importBook() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.any,
-      allowMultiple: true,
-    );
-
-    if (result == null) {
-      return;
-    }
-
-    List<PlatformFile> files = result.files;
-    AnxLog.info('importBook files: ${files.toString()}');
-    List<File> fileList = [];
-    // FilePicker on Windows will return files with original path,
-    // but on Android it will return files with temporary path.
-    // So we need to save the files to the temp directory.
+    final result = await FilePicker.platform.pickFiles(type: FileType.any, allowMultiple: true);
+    if (result == null || !mounted) return;
+    List<File> fileList;
     if (!AnxPlatform.isAndroid) {
-      fileList = await Future.wait(files.map((file) async {
-        return _copyToTempFile(sourcePath: file.path!, fileName: file.name);
-      }).toList());
+      fileList = await Future.wait(
+        result.files.map((f) => _copyToTempFile(src: f.path!, name: f.name)));
     } else {
-      fileList = files.map((file) => File(file.path!)).toList();
+      fileList = result.files.map((f) => File(f.path!)).toList();
     }
-
+    if (!mounted) return;
     importBookList(fileList, context, ref);
   }
 
+  // ── Category menu ───────────────────────────────────────────────
+  void _showCategoryMenu() {
+    showMenu<_CategoryMode>(
+      context: context,
+      position: RelativeRect.fromLTRB(0, 100, 0, 0),
+      items: _CategoryMode.values.map((m) => PopupMenuItem(
+        value: m,
+        child: Text(m.label),
+      )).toList(),
+    ).then((m) {
+      if (m != null && m != _currentCategory) setState(() => _currentCategory = m);
+    });
+  }
+
+  // ── Body builders ───────────────────────────────────────────────
+  Widget _bookTap(Book b, BuildContext ctx) =>
+      GestureDetector(
+        onTap: () => pushToReadingPage(ref, ctx, b),
+        child: BookCover(book: b, width: 100, height: 150),
+      );
+
+  /// allBooks: simple grid, no cards
+  Widget _buildAllBooks(List<Book> books) {
+    if (books.isEmpty) return const Center(child: BookshelfTips());
+    return GridView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 80),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3, childAspectRatio: 0.55, mainAxisSpacing: 16, crossAxisSpacing: 12),
+      itemCount: books.length,
+      itemBuilder: (ctx, i) {
+        final b = books[i];
+        return GestureDetector(
+          onTap: () => pushToReadingPage(ref, ctx, b),
+          child: Column(children: [
+            BookCover(book: b, height: 150),
+            const SizedBox(height: 4),
+            Text(b.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                style: Theme.of(ctx).textTheme.bodySmall),
+          ]),
+        );
+      },
+    );
+  }
+
+  /// Card with title + horizontal book row (max 4)
+  Widget _buildCard(String title, List<Book> books) {
+    final display = books.take(4).toList();
+    final hasMore = books.length > 4;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: FilledContainer(
+        radius: 16, padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text(title, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+            if (hasMore)
+              GestureDetector(
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => _SeeAllPage(title: title, books: books))),
+                child: Text('更多 >', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.primary)),
+              ),
+          ]),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 150,
+            child: display.isEmpty
+                ? const SizedBox.shrink()
+                : ListView.separated(
+                    scrollDirection: Axis.horizontal, itemCount: display.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 10),
+                    itemBuilder: (ctx, i) => _bookTap(display[i], ctx),
+                  ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  /// format view
+  Widget _buildFormatView(List<Book> books) {
+    final map = <String, List<Book>>{};
+    for (final b in books) map.putIfAbsent(_getFormat(b.filePath), () => []).add(b);
+    final entries = map.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    if (entries.isEmpty) return const Center(child: BookshelfTips());
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 80),
+      itemCount: entries.length,
+      itemBuilder: (ctx, i) {
+        final e = entries[i];
+        return _buildCard(e.key, e.value);
+      },
+    );
+  }
+
+  /// author view
+  Widget _buildAuthorView(List<Book> books) {
+    final map = <String, List<Book>>{};
+    for (final b in books) {
+      final author = b.author.isEmpty ? '未知' : b.author;
+      map.putIfAbsent(author, () => []).add(b);
+    }
+    final entries = map.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    if (entries.isEmpty) return const Center(child: BookshelfTips());
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 80),
+      itemCount: entries.length,
+      itemBuilder: (ctx, i) {
+        final e = entries[i];
+        return _buildCard(e.key, e.value);
+      },
+    );
+  }
+
+  /// collection view (using groupId from DB)
+  Widget _buildCollectionView(List<List<Book>> groups) {
+    // Flatten groups
+    final flat = groups.expand((g) => g).toList();
+    final map = <String, List<Book>>{};
+    for (final b in flat) {
+      if (b.groupId == 0) {
+        map.putIfAbsent('未分组', () => []).add(b);
+      } else {
+        map.putIfAbsent('合集${b.groupId}', () => []).add(b);
+      }
+    }
+    final entries = map.entries.toList();
+    if (entries.isEmpty) return const Center(child: BookshelfTips());
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 80),
+      itemCount: entries.length,
+      itemBuilder: (ctx, i) {
+        final e = entries[i];
+        return _buildCard(e.key, e.value);
+      },
+    );
+  }
+
+  /// progress view: three sections
+  Widget _buildProgressView(List<Book> books) {
+    final notStarted = books.where((b) => b.readingPercentage <= 0.02).toList();
+    final inProgress = books.where((b) => b.readingPercentage > 0.02 && b.readingPercentage < 0.98).toList();
+    final finished   = books.where((b) => b.readingPercentage >= 0.98).toList();
+    if (books.isEmpty) return const Center(child: BookshelfTips());
+    return ListView(
+      controller: _scrollController,
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 80),
+      children: [
+        if (inProgress.isNotEmpty) _buildProgressSection('进行中', inProgress),
+        if (finished.isNotEmpty)   _buildProgressSection('已读完', finished),
+        if (notStarted.isNotEmpty) _buildProgressSection('未开始', notStarted),
+      ],
+    );
+  }
+
+  Widget _buildProgressSection(String title, List<Book> books) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: FilledContainer(
+        radius: 16, padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 150,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal, itemCount: books.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 10),
+              itemBuilder: (ctx, i) => _bookTap(books[i], ctx),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  // ── Main build ──────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final statusFilter = ref.watch(readingStatusFilterNotifierProvider);
-    final selectedTags = ref.watch(tagSelectionProvider);
-    final tagsAsync = ref.watch(tagListProvider);
+    final cs = Theme.of(context).colorScheme;
 
-    Widget buildFilterBar() {
-      final statusChips = [
-        _StatusChip(
-          label: L10n.of(context).bookshelfFilterFinished,
-          selected: statusFilter == ReadingStatusFilter.finished,
-          onTap: () {
-            ref
-                .read(readingStatusFilterNotifierProvider.notifier)
-                .toggle(ReadingStatusFilter.finished);
-            ref.read(bookListProvider.notifier).refresh();
-          },
-        ),
-        _StatusChip(
-          label: L10n.of(context).bookshelfFilterReading,
-          selected: statusFilter == ReadingStatusFilter.reading,
-          onTap: () {
-            ref
-                .read(readingStatusFilterNotifierProvider.notifier)
-                .toggle(ReadingStatusFilter.reading);
-            ref.read(bookListProvider.notifier).refresh();
-          },
-        ),
-        _StatusChip(
-          label: L10n.of(context).bookshelfFilterNotStarted,
-          selected: statusFilter == ReadingStatusFilter.notStarted,
-          onTap: () {
-            ref
-                .read(readingStatusFilterNotifierProvider.notifier)
-                .toggle(ReadingStatusFilter.notStarted);
-            ref.read(bookListProvider.notifier).refresh();
-          },
-        ),
-      ];
-
-      Future<void> showTagEditDialog(Tag tag) async {
-        await TagChip.showEditDialog(
-          context: context,
-          initialName: tag.name,
-          initialColor: tag.color ?? hashColor(tag.name),
-          onRename: (newName) async {
-            await ref
-                .read(tagListProvider.notifier)
-                .updateTag(tag.id, newName: newName);
-            ref.read(bookListProvider.notifier).refresh();
-          },
-          onColorChange: (color) async {
-            await ref
-                .read(tagListProvider.notifier)
-                .updateTag(tag.id, color: color);
-            ref.read(bookListProvider.notifier).refresh();
-          },
-          onDelete: () async {
-            await ref.read(tagListProvider.notifier).deleteTag(tag.id);
-            if (selectedTags.contains(tag.id)) {
-              ref.read(tagSelectionProvider.notifier).toggle(tag.id);
-            }
-            ref.read(bookListProvider.notifier).refresh();
-          },
-        );
-      }
-
-      Future<void> showTagMenu() async {
-        final tags = tagsAsync.when(
-          data: (value) => value,
-          loading: () => const <Tag>[],
-          error: (_, __) => const <Tag>[],
-        );
-
-        if (!context.mounted) return;
-
-        final renderBox =
-            _tagButtonKey.currentContext?.findRenderObject() as RenderBox?;
-        final overlay =
-            Overlay.of(context).context.findRenderObject() as RenderBox?;
-        if (renderBox == null || overlay == null) return;
-
-        final position = RelativeRect.fromRect(
-          Rect.fromPoints(
-            renderBox.localToGlobal(Offset.zero, ancestor: overlay),
-            renderBox.localToGlobal(
-              renderBox.size.bottomRight(Offset.zero),
-              ancestor: overlay,
-            ),
-          ),
-          Offset.zero & overlay.size,
-        );
-
-        final liveSelected = {...selectedTags};
-
-        final boxMaxWidth = max(MediaQuery.of(context).size.width * 0.8, 500.0);
-
-        await showMenu<int>(
-          color: Colors.transparent,
-          shadowColor: Colors.transparent,
-          context: context,
-          position: position,
-          constraints: BoxConstraints(maxHeight: 360, maxWidth: boxMaxWidth),
-          items: [
-            PopupMenuItem<int>(
-              enabled: false,
-              padding: EdgeInsets.zero,
-              child: Align(
-                alignment: Alignment.topRight,
-                child: FilledContainer(
-                  constraints:
-                      BoxConstraints(maxHeight: 340, maxWidth: boxMaxWidth),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  child: StatefulBuilder(
-                    builder: (context, setStateMenu) {
-                      return SingleChildScrollView(
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: [
-                            if (tags.isEmpty)
-                              Text(
-                                L10n.of(context).tagsEmptyHint,
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
-                            // "No tag" virtual option - only show when there are tags
-                            if (tags.isNotEmpty)
-                              TagChip(
-                                label: L10n.of(context).noTagFilter,
-                                color: Colors.grey,
-                                selected: liveSelected.contains(kNoTagFilterId),
-                                onTap: () {
-                                  setStateMenu(() {
-                                    if (liveSelected.contains(kNoTagFilterId)) {
-                                      liveSelected.remove(kNoTagFilterId);
-                                    } else {
-                                      // Mutual exclusion: clear other tags when selecting "no tag"
-                                      liveSelected.clear();
-                                      liveSelected.add(kNoTagFilterId);
-                                    }
-                                  });
-                                  ref
-                                      .read(tagSelectionProvider.notifier)
-                                      .toggle(kNoTagFilterId);
-                                  ref.read(bookListProvider.notifier).refresh();
-                                },
-                                dense: false,
-                              ),
-                            for (final tag in tags)
-                              TagChip(
-                                label: tag.name,
-                                color: tag.color,
-                                selected: liveSelected.contains(tag.id),
-                                onTap: () {
-                                  setStateMenu(() {
-                                    if (liveSelected.contains(tag.id)) {
-                                      liveSelected.remove(tag.id);
-                                    } else {
-                                      // Mutual exclusion: clear "no tag" when selecting a regular tag
-                                      liveSelected.remove(kNoTagFilterId);
-                                      liveSelected.add(tag.id);
-                                    }
-                                  });
-                                  ref
-                                      .read(tagSelectionProvider.notifier)
-                                      .toggle(tag.id);
-                                  ref.read(bookListProvider.notifier).refresh();
-                                },
-                                onLongPress: () {
-                                  Navigator.of(context).pop();
-                                  Future.microtask(
-                                      () => showTagEditDialog(tag));
-                                },
-                                dense: false,
-                              ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      }
-
-      final selectedTagWidgets = tagsAsync.when(
-        data: (tags) {
-          final tagMap = {for (final t in tags) t.id: t};
-          final List<Widget> chips = [];
-
-          // Display "no tag" chip
-          if (selectedTags.contains(kNoTagFilterId)) {
-            chips.add(Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: TagChip(
-                label: L10n.of(context).noTagFilter,
-                color: Colors.grey,
-                selected: true,
-                onTap: () {
-                  ref
-                      .read(tagSelectionProvider.notifier)
-                      .toggle(kNoTagFilterId);
-                  ref.read(bookListProvider.notifier).refresh();
-                },
-                dense: true,
-              ),
-            ));
-          }
-
-          // Display regular tag chips
-          chips.addAll(selectedTags
-              .where((id) => id != kNoTagFilterId)
-              .map((id) => tagMap[id])
-              .whereType<Tag>()
-              .map((tag) => Padding(
-                    padding: const EdgeInsets.only(left: 8),
-                    child: TagChip(
-                      label: tag.name,
-                      color: tag.color,
-                      selected: true,
-                      onTap: () {
-                        ref.read(tagSelectionProvider.notifier).toggle(tag.id);
-                        ref.read(bookListProvider.notifier).refresh();
-                      },
-                      dense: true,
-                    ),
-                  )));
-
-          return Row(children: chips);
-        },
-        loading: () => const SizedBox.shrink(),
-        error: (_, __) => const SizedBox.shrink(),
-      );
-
-      return Container(
-        height: 40,
-        padding: const EdgeInsets.fromLTRB(12, 0, 12, 5),
-        child: Row(
-          children: [
-            const SizedBox(width: 8),
-            Expanded(
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    ...statusChips,
-                    selectedTagWidgets,
-                  ],
-                ),
-              ),
-            ),
-            IconButton(
-              key: _tagButtonKey,
-              icon: const Icon(EvaIcons.pricetags_outline, size: 22),
-              tooltip: L10n.of(context).bookshelfFilterTagsTooltip,
-              onPressed: showTagMenu,
-            ),
-          ],
-        ),
-      );
-    }
-
-    void handleBottomSheet(BuildContext context, Book book) {
-      showBottomSheet(
-        context: context,
-        builder: (context) => BookBottomSheet(book: book),
-      );
-    }
-
-    List<int> lockedIndices = [];
-
-    Widget buildBookshelfBody = ref.watch(bookListProvider).when(
-          data: (books) {
-            for (int i = 0; i < books.length; i++) {
-              // folder can't be dragged
-              if (books[i].length != 1) {
-                lockedIndices.add(i);
-              }
-            }
-            return books.isEmpty
-                ? const Center(child: BookshelfTips())
-                : ReorderableBuilder(
-                    // lock all index of books
-                    lockedIndices: lockedIndices,
-                    enableDraggable: true,
-                    longPressDelay: const Duration(milliseconds: 300),
-                    onReorder: (ReorderedListFunction reorderedListFunction) {},
-                    scrollController: _scrollController,
-                    onDragStarted: (index) {
-                      if (books[index].length == 1) {
-                        handleBottomSheet(context, books[index].first);
-                        // add other books to lockedIndices
-                        for (int i = 0; i < books.length; i++) {
-                          if (i != index) {
-                            lockedIndices.add(i);
-                          }
-                        }
-                      }
-                    },
-                    onDragEnd: (index) {
-                      // remove all books from lockedIndices
-                      lockedIndices = [];
-                      for (int i = 0; i < books.length; i++) {
-                        if (books[i].length != 1) {
-                          lockedIndices.add(i);
-                        }
-                      }
-                      setState(() {});
-                    },
-                    children: [
-                      ...books.map(
-                        (book) {
-                          final topLevelKey = ValueKey<String>(
-                            book.first.id.toString(),
-                          );
-                          return book.length == 1
-                              ? CustomDraggable(
-                                  key: topLevelKey,
-                                  data: book.first,
-                                  child: BookFolder(books: book),
-                                )
-                              : BookFolder(
-                                  key: topLevelKey,
-                                  books: book,
-                                );
-                        },
-                      ),
-                    ],
-                    builder: (children) {
-                      return LayoutBuilder(builder: (context, constraints) {
-                        return Column(
-                          children: [
-                            HintBanner(
-                                icon: const Icon(Icons.copy),
-                                hintKey: HintKey.dragAndDropToCreateFolder,
-                                margin: EdgeInsets.fromLTRB(20, 0, 20, 5),
-                                child: Text(L10n.of(context)
-                                    .dragAndDropToCreateFolderHint)),
-                            Expanded(
-                              child: GridView(
-                                key: _gridViewKey,
-                                controller: _scrollController,
-                                padding:
-                                    const EdgeInsets.fromLTRB(20, 12, 20, 80),
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: constraints.maxWidth ~/
-                                      Prefs().bookCoverWidth,
-                                  childAspectRatio: 1 / 2.1,
-                                  mainAxisSpacing: 30,
-                                  crossAxisSpacing: 20,
-                                ),
-                                children: children,
-                              ),
-                            ),
-                          ],
-                        );
-                      });
-                    });
-          },
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, stack) => Center(child: Text(error.toString())),
-        );
-
-    Widget body = Column(
-      children: [
-        buildFilterBar(),
-        Expanded(
-          child: DropTarget(
-            onDragDone: (detail) async {
-              List<File> files = [];
-              for (var file in detail.files) {
-                files.add(await _copyToTempFile(
-                  sourcePath: file.path,
-                  fileName: file.name,
-                ));
-              }
-              importBookList(files, context, ref);
-              setState(() {
-                _dragging = false;
-              });
-            },
-            onDragEntered: (detail) {
-              setState(() {
-                _dragging = true;
-              });
-            },
-            onDragExited: (detail) {
-              setState(() {
-                _dragging = false;
-              });
-            },
-            child: Stack(
-              children: [
-                buildBookshelfBody,
-                if (_dragging)
-                  Container(
-                    color: Theme.of(context).colorScheme.surface.withAlpha(90),
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            EvaIcons.arrowhead_down_outline,
-                            size: 48,
-                            color: Theme.of(context).colorScheme.onSurface,
-                          ),
-                          Text(
-                            L10n.of(context).bookshelfDragging,
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ],
+    final body = ref.watch(bookListProvider).when(
+      data: (groups) {
+        final allBooks = groups.expand((g) => g).toList();
+        switch (_currentCategory) {
+          case _CategoryMode.allBooks:   return _buildAllBooks(allBooks);
+          case _CategoryMode.format:     return _buildFormatView(allBooks);
+          case _CategoryMode.author:     return _buildAuthorView(allBooks);
+          case _CategoryMode.collection: return _buildCollectionView(groups);
+          case _CategoryMode.progress:   return _buildProgressView(allBooks);
+        }
+      },
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text('$e')),
     );
 
-    PreferredSizeWidget appBar = AppBar(
-      forceMaterialTransparency: true,
-      title: Container(
-          height: 34,
-          constraints: const BoxConstraints(maxWidth: 400),
-          child: InkWell(
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const SearchPage(),
-                ),
-              );
-            },
-            child: FilledContainer(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              color: Theme.of(context).colorScheme.surface.withAlpha(80),
-              child: Row(
-                children: [
-                  const Icon(Icons.search, color: Colors.grey),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(L10n.of(context).searchBooksOrNotes,
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyMedium
-                            ?.copyWith(color: Theme.of(context).hintColor),
-                        overflow: TextOverflow.ellipsis),
-                  )
-                ],
-              ),
-            ),
-          )),
-      actions: [
-        const SyncButton(),
-        IconButton(
-          icon: const Icon(Icons.add),
-          onPressed: _importBook,
+    final searchBar = Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: SizedBox(height: 34, child: InkWell(
+        onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SearchPage())),
+        child: Container(
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHighest.withAlpha(120), borderRadius: BorderRadius.circular(10)),
+          child: Row(children: [
+            const SizedBox(width: 10),
+            Icon(Icons.search, size: 20, color: cs.onSurfaceVariant),
+            const SizedBox(width: 8),
+            Text(L10n.of(context).searchBooksOrNotes,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).hintColor)),
+          ]),
         ),
-        IconButton(
-            icon: const Icon(Icons.sort),
-            onPressed: () {
-              showMenu(
-                context: context,
-                position: RelativeRect.fromLTRB(
-                  MediaQuery.of(context).size.width,
-                  MediaQuery.of(context).padding.top + kToolbarHeight,
-                  0.0,
-                  0.0,
-                ),
-                items: [
-                  for (var sortField in SortFieldEnum.values)
-                    PopupMenuItem(
-                        child: Text(
-                          sortField.getL10n(context),
-                          style: TextStyle(
-                            color: sortField == Prefs().sortField
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context).colorScheme.onSurface,
-                          ),
-                        ),
-                        onTap: () {
-                          Prefs().sortField = sortField;
-                          ref.read(bookListProvider.notifier).refresh();
-                        }),
-                  PopupMenuItem(
-                    enabled: false,
-                    child: StatefulBuilder(builder: (_, setState) {
-                      return Row(
-                        children: [
-                          Expanded(
-                            child: AnxSegmentedButton<SortOrderEnum>(
-                              onSelectionChanged: (value) {
-                                Prefs().sortOrder = value.first;
-                                ref.read(bookListProvider.notifier).refresh();
-                                setState(() {});
-                              },
-                              segments: SortOrderEnum.values
-                                  .map(
-                                    (e) => SegmentButtonItem(
-                                      value: e,
-                                      label: e.getL10n(
-                                          navigatorKey.currentContext!),
-                                    ),
-                                  )
-                                  .toList(),
-                              selected: {Prefs().sortOrder},
-                            ),
-                          ),
-                        ],
-                      );
-                    }),
-                  )
-                ],
-              );
-            }),
+      )),
+    );
+
+    final appBar = AppBar(
+      forceMaterialTransparency: true,
+      title: GestureDetector(
+        onTap: _showCategoryMenu,
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text(_currentCategory.label,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: cs.primary)),
+          const SizedBox(width: 2),
+          Icon(Icons.arrow_drop_down, size: 18, color: cs.primary),
+        ]),
+      ),
+      actions: [
+        IconButton(icon: const Icon(Icons.add), onPressed: _importBook),
       ],
     );
 
     return Container(
-        decoration: Prefs().eInkMode
-            ? null
-            : BoxDecoration(
-                gradient: RadialGradient(
-                  tileMode: TileMode.clamp,
-                  center: Alignment.topRight,
-                  radius: 1,
-                  colors: [
-                    Theme.of(context).colorScheme.primary.withAlpha(5),
-                    Theme.of(context).scaffoldBackgroundColor,
-                  ],
-                ),
-              ),
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          appBar: appBar,
-          body: body,
-        ));
+      decoration: Prefs().eInkMode ? null : BoxDecoration(
+        gradient: RadialGradient(
+          tileMode: TileMode.clamp, center: Alignment.topRight, radius: 1,
+          colors: [cs.primary.withAlpha(5), Theme.of(context).scaffoldBackgroundColor],
+        ),
+      ),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: appBar,
+        body: Column(children: [searchBar, Expanded(child: body)]),
+      ),
+    );
   }
 }
 
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
+// ── "See All" page ────────────────────────────────────────────────
+class _SeeAllPage extends ConsumerWidget {
+  final String title;
+  final List<Book> books;
+  const _SeeAllPage({required this.title, required this.books});
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: FilterChip(
-        labelPadding: const EdgeInsets.all(0),
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        label: Text(label),
-        selected: selected,
-        onSelected: (_) => onTap(),
-        backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-        checkmarkColor: Theme.of(context).colorScheme.primary,
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: GridView.builder(
+        padding: const EdgeInsets.all(16),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3, childAspectRatio: 0.55, mainAxisSpacing: 16, crossAxisSpacing: 12),
+        itemCount: books.length,
+        itemBuilder: (ctx, i) {
+          final b = books[i];
+          return GestureDetector(
+            onTap: () => pushToReadingPage(ref, ctx, b),
+            child: Column(children: [
+              BookCover(book: b, height: 150),
+              const SizedBox(height: 4),
+              Text(b.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                  style: Theme.of(ctx).textTheme.bodySmall),
+            ]),
+          );
+        },
       ),
     );
   }

@@ -9,7 +9,6 @@ import 'package:anx_reader/widgets/highlight_digit.dart';
 import 'package:anx_reader/widgets/statistic/dashboard_tiles/dashboard_tile_registry.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:introduction_screen/introduction_screen.dart';
 
 // Provider to track current page index in IntroductionScreen
 final _currentPageIndexProvider = StateProvider<int>((ref) => 0);
@@ -138,55 +137,38 @@ class _AddTileSheetContentState extends ConsumerState<AddTileSheetContent> {
               ],
             ),
           ),
-          // Introduction Screen
+          // Dashboard tile carousel
           Expanded(
-            child: IntroductionScreen(
-              showDoneButton: false,
-              pages: availableTiles.map((type) {
-                final dashboardTile = dashboardTileRegistry[type]!;
-                final metadata = dashboardTile.metadata;
-                return PageViewModel(
-                    titleWidget: Text(
-                      metadata.title,
-                      style: Theme.of(context).textTheme.headlineMedium,
-                    ),
-                    bodyWidget: Column(
-                      children: [
-                        SizedBox(
-                            height: dashboardTile.tileSize(context).height,
-                            width: dashboardTile.tileSize(context).width,
-                            child: dashboardTile.buildTile(context, ref)),
-                        SizedBox(height: 40),
-                        Text(
-                          metadata.description,
-                          style: Theme.of(context).textTheme.bodyLarge,
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                    decoration: PageDecoration(
-                      bodyPadding: EdgeInsets.all(0),
-                      pageMargin: EdgeInsets.all(0),
-                    ));
-              }).toList(),
-              onDone: () {
-                // Navigator.pop(context);
-              },
-              onChange: (index) {
+            child: PageView(
+              onPageChanged: (index) {
                 ref.read(_currentPageIndexProvider.notifier).state = index;
               },
-              showBackButton: false,
-              showNextButton: false,
-              dotsDecorator: DotsDecorator(
-                size: const Size.square(10.0),
-                activeSize: const Size(20.0, 10.0),
-                activeColor: Theme.of(context).primaryColor,
-                color: Colors.black26,
-                spacing: const EdgeInsets.symmetric(horizontal: 3.0),
-                activeShape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(25.0),
-                ),
-              ),
+              children: availableTiles.map((type) {
+                final dashboardTile = dashboardTileRegistry[type]!;
+                final metadata = dashboardTile.metadata;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Column(
+                    children: [
+                      Text(
+                        metadata.title,
+                        style: Theme.of(context).textTheme.headlineMedium,
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                          height: dashboardTile.tileSize(context).height,
+                          width: dashboardTile.tileSize(context).width,
+                          child: dashboardTile.buildTile(context, ref)),
+                      const SizedBox(height: 16),
+                      Text(
+                        metadata.description,
+                        style: Theme.of(context).textTheme.bodyLarge,
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
             ),
           ),
           // Add Button

@@ -1,5 +1,8 @@
 import 'package:anx_reader/config/shared_preference_provider.dart';
 import 'package:anx_reader/service/tts/models/tts_voice.dart';
+import 'package:anx_reader/service/tts/sherpa_onnx_tts_engine.dart';
+import 'package:anx_reader/service/tts/system_tts_engine.dart';
+import 'package:anx_reader/service/tts/tts_engine.dart';
 import 'package:anx_reader/service/tts/tts_factory.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -21,17 +24,7 @@ class TtsService extends _$TtsService {
 
 @riverpod
 Future<List<TtsVoice>> ttsVoices(Ref ref) async {
-  // Watch service change to trigger refresh
   ref.watch(ttsServiceProvider);
-
-  // Also watch system tts toggle if we want to support switching between system/online here?
-  // Current design in SettingsPage separates System vs Online via a switch.
-  // The voice list usually depends on what is currently active or selected.
-
-  // Use TtsFactory to get the right instance.
-  // Note: TtsFactory.current depends on Prefs().isSystemTts which is not watched here directly.
-  // But NarrateSettings usually toggles isSystemTts.
-
   final tts = TtsFactory().current;
   return await tts.getVoices();
 }
@@ -50,3 +43,45 @@ class OnlineTtsConfig extends _$OnlineTtsConfig {
     state = current;
   }
 }
+
+/// Provider for the current TTS engine type.
+@riverpod
+class TtsEngineType extends _$TtsEngineType {
+  @override
+  TtsEngineTypeEnum build() {
+    final stored = Prefs().ttsEngineType;
+    return TtsEngineTypeEnum.values.firstWhere(
+      (e) => e.name == stored,
+      orElse: () => TtsEngineTypeEnum.system,
+    );
+  }
+
+  void setEngine(TtsEngineTypeEnum type) {
+    Prefs().ttsEngineType = type.name;
+    state = type;
+  }
+}
+
+/// Provider that creates and manages the current TTS engine.
+///
+/// Currently returns [SystemTtsEngine]. When engine type changes,
+/// disposes the old engine and creates the new one.
+@riverpod
+TtsEngine ttsEngine(Ref ref) {
+  final engineType = ref.watch(ttsEngineTypeProvider);
+  final engine = _createEngine(engineType);
+  ref.onDispose(() => engine.dispose());
+  return engine;
+}
+
+TtsEngine _createEngine(TtsEngineTypeEnum type) {
+  return switch (type) {
+    TtsEngineTypeEnum.system => SystemTtsEngine(),
+    TtsEngineTypeEnum.sherpaOnnx => _createPlaceholderEngine(),
+  };
+}
+
+TtsEngine _createPlaceholderEngine() {
+  return SherpaOnnxTtsEngine();
+}
+

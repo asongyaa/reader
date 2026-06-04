@@ -3,8 +3,8 @@ import 'package:anx_reader/service/tts/base_tts.dart';
 import 'package:anx_reader/service/tts/tts_handler.dart';
 import 'package:anx_reader/widgets/common/container/filled_container.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:icons_plus/icons_plus.dart';
-import 'package:pointer_interceptor/pointer_interceptor.dart';
 
 class TtsFab extends StatefulWidget {
   const TtsFab({super.key});
@@ -17,6 +17,7 @@ class _TtsFabState extends State<TtsFab> with SingleTickerProviderStateMixin {
   bool _isExpanded = false;
   late AnimationController _animationController;
   late Animation<double> _expandAnimation;
+  double _fabPressScale = 1.0;
 
   @override
   void initState() {
@@ -78,8 +79,7 @@ class _TtsFabState extends State<TtsFab> with SingleTickerProviderStateMixin {
           duration: const Duration(milliseconds: 200),
           child: IgnorePointer(
             ignoring: !ttsActive,
-            child: PointerInterceptor(
-              child: Row(
+            child: Row(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -145,34 +145,52 @@ class _TtsFabState extends State<TtsFab> with SingleTickerProviderStateMixin {
                   ),
                   // Main FAB — heroTag: null disables the built-in Hero to avoid
                   // nesting inside the reading page's own Hero animation.
-                  FloatingActionButton(
-                    heroTag: null,
-                    mini: true,
-                    onPressed: _toggleExpanded,
-                    elevation: 4,
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 200),
-                      child: _isExpanded
-                          ? const Icon(
-                              Icons.close,
-                              key: ValueKey('close'),
-                              size: 20,
-                            )
-                          : Icon(
-                              isPlaying
-                                  ? EvaIcons.pause_circle_outline
-                                  : EvaIcons.play_circle_outline,
-                              key: ValueKey('tts_state'),
-                              size: 20,
-                            ),
+                  AnimatedScale(
+                    scale: _fabPressScale,
+                    duration: const Duration(milliseconds: 120),
+                    child: FloatingActionButton(
+                      heroTag: null,
+                      mini: true,
+                      onPressed: () {
+                        setState(() => _fabPressScale = 0.88);
+                        Future.delayed(const Duration(milliseconds: 100), () {
+                          if (mounted) {
+                            setState(() => _fabPressScale = 1.0);
+                          }
+                        });
+                        _toggleExpanded();
+                      },
+                      elevation: 4,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 200),
+                        child: _isExpanded
+                            ? const Icon(
+                                Icons.close,
+                                key: ValueKey('close'),
+                                size: 20,
+                              )
+                            : Icon(
+                                isPlaying
+                                    ? EvaIcons.pause_circle_outline
+                                    : EvaIcons.play_circle_outline,
+                                key: ValueKey('tts_state'),
+                                size: 20,
+                              ),
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-          ),
         );
       },
+    ).animate().scale(
+      begin: const Offset(0.85, 0.85),
+      duration: 400.ms,
+      curve: Curves.easeOut,
+    ).fadeIn(
+      duration: 300.ms,
+      curve: Curves.easeOut,
     );
   }
 }

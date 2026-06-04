@@ -19,6 +19,7 @@ import 'package:anx_reader/models/read_theme.dart';
 import 'package:anx_reader/page/book_player/epub_player.dart';
 import 'package:anx_reader/widgets/reading_page/widgets/bgimg_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 
 enum PageTurn {
@@ -63,6 +64,10 @@ class StyleWidgetState extends State<StyleWidget> {
   @override
   Widget build(BuildContext context) {
     return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
       child: Column(
         children: [
@@ -89,6 +94,13 @@ class StyleWidgetState extends State<StyleWidget> {
           ),
         ],
       ),
+    ).animate().slideY(
+      begin: 0.1,
+      duration: 350.ms,
+      curve: Curves.easeOut,
+    ).fadeIn(
+      duration: 300.ms,
+      curve: Curves.easeOut,
     );
   }
 

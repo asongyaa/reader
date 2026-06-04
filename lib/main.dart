@@ -7,7 +7,6 @@ import 'package:anx_reader/dao/database.dart';
 import 'package:anx_reader/enums/sync_direction.dart';
 import 'package:anx_reader/enums/sync_trigger.dart';
 import 'package:anx_reader/l10n/generated/L10n.dart';
-import 'package:anx_reader/models/window_info.dart';
 import 'package:anx_reader/page/home_page.dart';
 import 'package:anx_reader/page/migration_page.dart';
 import 'package:anx_reader/service/book_player/book_player_server.dart';
@@ -18,7 +17,6 @@ import 'package:anx_reader/utils/color_scheme.dart';
 import 'package:anx_reader/utils/error/common.dart';
 import 'package:anx_reader/utils/get_path/get_base_path.dart';
 import 'package:anx_reader/utils/log/common.dart';
-import 'package:anx_reader/utils/window_position_validator.dart';
 import 'package:anx_reader/providers/sync.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
@@ -26,7 +24,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:heroine/heroine.dart';
 import 'package:provider/provider.dart' as provider;
-import 'package:window_manager/window_manager.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
 late AudioHandler audioHandler;
@@ -41,9 +38,10 @@ Future<void> main() async {
   await Prefs().initPrefs();
   HttpOverrides.global = AnxHttpProxyOverrides();
 
-  // Initialize desktop window with validated position
+  // Initialize desktop window with validated position (desktop only)
   if (AnxPlatform.isWindows || AnxPlatform.isMacOS) {
-    await initializeDesktopWindow();
+    initBasePath();
+    AnxLog.init();
   }
 
   // Check if migration is needed before initializing paths
@@ -92,67 +90,19 @@ class MyApp extends ConsumerStatefulWidget {
   ConsumerState<ConsumerStatefulWidget> createState() => _MyAppState();
 }
 
-class _MyAppState extends ConsumerState<MyApp>
-    with WidgetsBindingObserver, WindowListener {
+class _MyAppState extends ConsumerState<MyApp> with WidgetsBindingObserver {
   static const Locale _englishFallbackLocale = Locale('en');
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    windowManager.addListener(this);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
-  }
-
-  @override
-  Future<void> onWindowClose() async {
-    await Server().stop();
-    await webViewEnvironment?.dispose();
-    webViewEnvironment = null;
-    await DBHelper.close();
-    await windowManager.destroy();
-  }
-
-  @override
-  Future<void> onWindowMoved() async {
-    await _updateWindowInfo();
-  }
-
-  @override
-  Future<void> onWindowMaximize() async {
-    await _updateWindowInfo();
-  }
-
-  @override
-  Future<void> onWindowUnmaximize() async {
-    await _updateWindowInfo();
-  }
-
-  @override
-  Future<void> onWindowResized() async {
-    await _updateWindowInfo();
-  }
-
-  Future<void> _updateWindowInfo() async {
-    if (!AnxPlatform.isWindows && !AnxPlatform.isMacOS) {
-      return;
-    }
-    final windowOffset = await windowManager.getPosition();
-    final windowSize = await windowManager.getSize();
-    final isMaximized = await windowManager.isMaximized();
-
-    Prefs().windowInfo = WindowInfo(
-        x: windowOffset.dx,
-        y: windowOffset.dy,
-        width: windowSize.width,
-        height: windowSize.height,
-        isMaximized: isMaximized);
-    AnxLog.info('onWindowClose: Offset: $windowOffset, Size: $windowSize');
   }
 
   @override

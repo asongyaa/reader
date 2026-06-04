@@ -79,6 +79,9 @@ class TtsHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   @override
   Future<void> play() async {
+    final state = epubPlayerKey.currentState;
+    if (state == null) return;
+
     final session = await AudioSession.instance;
     if (await session.setActive(true)) {
       playbackState.add(playbackState.value.copyWith(
@@ -89,14 +92,13 @@ class TtsHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
 
     final item = MediaItem(
-      id: epubPlayerKey.currentState!.chapterTitle,
-      title: epubPlayerKey.currentState!.chapterTitle,
-      album: epubPlayerKey.currentState!.book.title,
-      artist: epubPlayerKey.currentState!.book.author,
+      id: state.chapterTitle,
+      title: state.chapterTitle,
+      album: state.book.title,
+      artist: state.book.author,
       // Use -1 to tell system not to render a progress bar.
       duration: const Duration(milliseconds: -1),
-      artUri: Uri.tryParse(
-          'file://${epubPlayerKey.currentState!.book.coverFullPath}'),
+      artUri: Uri.tryParse('file://${state.book.coverFullPath}'),
     );
 
     // Ensure system receives queue + active index for control center metadata.

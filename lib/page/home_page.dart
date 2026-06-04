@@ -1,32 +1,22 @@
-import 'dart:ui';
-
 import 'package:anx_reader/dao/database.dart';
 import 'package:anx_reader/enums/sync_direction.dart';
 import 'package:anx_reader/enums/sync_trigger.dart';
 import 'package:anx_reader/l10n/generated/L10n.dart';
-import 'package:anx_reader/page/home_page/ai_page.dart';
 import 'package:anx_reader/service/initialization_check.dart';
 import 'package:anx_reader/page/home_page/bookshelf_page.dart';
-import 'package:anx_reader/page/home_page/notes_page.dart';
-import 'package:anx_reader/page/home_page/settings_page.dart';
-import 'package:anx_reader/page/home_page/statistics_page.dart';
+import 'package:anx_reader/page/home_page/my_page.dart';
+import 'package:anx_reader/page/home_page/recent_page.dart';
 import 'package:anx_reader/service/receive_file/receive_share.dart';
 import 'package:anx_reader/service/vibration_service.dart';
 import 'package:anx_reader/utils/check_update.dart';
-import 'package:anx_reader/utils/env_var.dart';
 import 'package:anx_reader/utils/get_path/get_temp_dir.dart';
 import 'package:anx_reader/utils/load_default_font.dart';
 import 'package:anx_reader/utils/log/common.dart';
 import 'package:anx_reader/utils/platform_utils.dart';
 import 'package:anx_reader/providers/sync.dart';
-import 'package:anx_reader/providers/iap.dart';
 import 'package:anx_reader/config/shared_preference_provider.dart';
 import 'package:anx_reader/utils/toast/common.dart';
-import 'package:anx_reader/widgets/ai/ai_chat_stream.dart';
 import 'package:anx_reader/widgets/common/container/filled_container.dart';
-import 'package:anx_reader/widgets/settings/about.dart';
-import 'package:flutter/cupertino.dart';
-import 'package:flutter_floating_bottom_bar/flutter_floating_bottom_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -44,7 +34,7 @@ class HomePage extends ConsumerStatefulWidget {
 }
 
 class _HomePageState extends ConsumerState<HomePage> {
-  String _currentTab = 'bookshelf';
+  String _currentTab = 'recent';
 
   bool? _expanded;
 
@@ -103,9 +93,6 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Future<void> initAnx() async {
-    if (EnvVar.enableInAppPurchase) {
-      ref.read(iapProvider.future);
-    }
     AnxToast.init(context);
     checkUpdate(false);
     InitializationCheck.check();
@@ -132,32 +119,19 @@ class _HomePageState extends ConsumerState<HomePage> {
   Widget build(BuildContext context) {
     List<Map<String, dynamic>> navBarItems = [
       {
+        'icon': Icons.history,
+        'label': '最近',
+        'identifier': 'recent'
+      },
+      {
         'icon': EvaIcons.book_open,
         'label': L10n.of(context).navBarBookshelf,
         'identifier': 'bookshelf'
       },
-      if (Prefs().bottomNavigatorShowStatistics)
-        {
-          'icon': Icons.show_chart,
-          'label': L10n.of(context).navBarStatistics,
-          'identifier': 'statistics'
-        },
-      if (Prefs().bottomNavigatorShowAI && EnvVar.enableAIFeature)
-        {
-          'icon': Icons.auto_awesome,
-          'label': L10n.of(context).navBarAI,
-          'identifier': 'ai'
-        },
-      if (Prefs().bottomNavigatorShowNote)
-        {
-          'icon': Icons.note,
-          'label': L10n.of(context).navBarNotes,
-          'identifier': 'notes'
-        },
       {
-        'icon': EvaIcons.settings_2,
-        'label': L10n.of(context).navBarSettings,
-        'identifier': 'settings'
+        'icon': Icons.person_outline,
+        'label': '我的',
+        'identifier': 'my'
       },
     ];
 
@@ -174,24 +148,15 @@ class _HomePageState extends ConsumerState<HomePage> {
       ScrollController? controller,
     ) {
       final page = [
+        RecentPage(controller: controller),
         BookshelfPage(controller: controller),
-        if (Prefs().bottomNavigatorShowStatistics)
-          StatisticPage(controller: controller),
-        if (Prefs().bottomNavigatorShowAI && EnvVar.enableAIFeature)
-          AiChatStream(),
-        if (Prefs().bottomNavigatorShowNote) NotesPage(controller: controller),
-        SettingsPage(controller: controller),
+        MyPage(controller: controller),
       ];
       return page[index];
     }
 
     void onBottomTap(int index, bool fromRail) {
       VibrationService.heavy();
-      if (navBarItems[index]['identifier'] == 'ai' && !fromRail) {
-        showCupertinoSheet(
-            context: context, builder: (context) => const AiPage());
-        return;
-      }
       setState(() {
         _currentTab = navBarItems[index]['identifier'];
       });
@@ -231,18 +196,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                     radius: 20,
                     child: SafeArea(
                       child: NavigationRail(
-                        leading: InkWell(
-                          onTap: () => openAboutDialog(),
-                          child: Padding(
-                            padding: const EdgeInsets.only(right: 2.0),
-                            child: Image.asset(
-                              width: 32,
-                              height: 32,
-                              'assets/icon/Anx-logo-tined.png',
-                              color: Theme.of(context).colorScheme.secondary,
-                            ),
-                          ),
-                        ),
                         groupAlignment: 1,
                         extended: false,
                         selectedIndex: currentIndex,
@@ -251,7 +204,6 @@ class _HomePageState extends ConsumerState<HomePage> {
                         destinations: railBarItems,
                         labelType: NavigationRailLabelType.all,
                         backgroundColor: Colors.transparent,
-                        // elevation: 0,
                       ),
                     ),
                   ),
@@ -261,58 +213,20 @@ class _HomePageState extends ConsumerState<HomePage> {
             ),
           );
         } else {
-          if (navBarItems[currentIndex]['identifier'] == 'ai') {
-            currentIndex = 0;
-          }
           return Scaffold(
             extendBody: true,
-            body: BottomBar(
-              width: 330,
-              body: (_, controller) =>
-                  pages(currentIndex, constraints, controller),
-              hideOnScroll: Prefs().autoHideBottomBar,
-              scrollOpposite: false,
-              curve: Curves.easeIn,
-              barColor: Colors.transparent,
-              iconDecoration: BoxDecoration(
-                color: Prefs().autoHideBottomBar
-                    ? Theme.of(context).colorScheme.primary
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(500),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(32),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
-                  child: Container(
-                    height: 64,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .surfaceContainer
-                          .withAlpha(123),
-                      borderRadius: BorderRadius.circular(32),
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.outline,
-                        width: 0.5,
-                      ),
-                    ),
-                    child: BottomNavigationBar(
-                      selectedFontSize: 12,
-                      enableFeedback: true,
-                      type: BottomNavigationBarType.fixed,
-                      landscapeLayout:
-                          BottomNavigationBarLandscapeLayout.linear,
-                      currentIndex: currentIndex,
-                      onTap: (int index) => onBottomTap(index, false),
-                      items: bottomBarItems,
-                      backgroundColor: Colors.transparent,
-                      elevation: 0,
-                      // height: 64,
-                    ),
-                  ),
-                ),
-              ),
+            body: pages(currentIndex, constraints, null),
+            bottomNavigationBar: BottomNavigationBar(
+              selectedFontSize: 12,
+              enableFeedback: true,
+              type: BottomNavigationBarType.fixed,
+              landscapeLayout:
+                  BottomNavigationBarLandscapeLayout.linear,
+              currentIndex: currentIndex,
+              onTap: (int index) => onBottomTap(index, false),
+              items: bottomBarItems,
+              backgroundColor: Colors.transparent,
+              elevation: 0,
             ),
           );
         }

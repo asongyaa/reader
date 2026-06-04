@@ -3,7 +3,6 @@ import 'package:anx_reader/enums/lang_list.dart';
 import 'package:anx_reader/service/translate/index.dart';
 import 'package:anx_reader/widgets/common/axis_flex.dart';
 import 'package:flutter/material.dart';
-import 'package:pointer_interceptor/pointer_interceptor.dart';
 import 'dart:async';
 
 class TranslationMenu extends StatefulWidget {
@@ -68,8 +67,7 @@ class _TranslationMenuState extends State<TranslationMenu> {
   Widget _langPicker(bool isFrom) {
     final MenuController menuController = MenuController();
 
-    return PointerInterceptor(
-      child: MenuAnchor(
+    return MenuAnchor(
         style: MenuStyle(
           backgroundColor: WidgetStateProperty.all(
             Theme.of(context).colorScheme.secondaryContainer,
@@ -79,8 +77,7 @@ class _TranslationMenuState extends State<TranslationMenu> {
         controller: menuController,
         menuChildren: [
           for (var lang in LangListEnum.values)
-            PointerInterceptor(
-              child: MenuItemButton(
+            MenuItemButton(
                 onPressed: () {
                   if (isFrom) {
                     Prefs().translateFrom = lang;
@@ -90,7 +87,6 @@ class _TranslationMenuState extends State<TranslationMenu> {
                 },
                 child: Text(lang.getNative(context)),
               ),
-            ),
         ],
         builder: (context, controller, child) {
           return GestureDetector(
@@ -108,7 +104,6 @@ class _TranslationMenuState extends State<TranslationMenu> {
             ),
           );
         },
-      ),
     );
   }
 

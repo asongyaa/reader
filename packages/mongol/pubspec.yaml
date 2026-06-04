@@ -1,0 +1,10 @@
+name: mongol
+version: 9.2.1-patched
+description: Patched version for Flutter 3.44 compatibility
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  characters: ^1.2.1

@@ -42,9 +42,12 @@ class SettingsSection extends AbstractSettingsSection {
             end: 24,
           ),
           child: DefaultTextStyle(
-            style: TextStyle(
-              color: Theme.of(context).primaryColor,
-            ),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.primary,
+                ) ??
+                TextStyle(
+                  color: Theme.of(context).colorScheme.primary,
+                ),
             child: title!,
           ),
         ),
