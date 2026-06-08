@@ -19,7 +19,6 @@ import 'package:anx_reader/widgets/reading_page/notes_widget.dart';
 import 'package:anx_reader/models/reading_time.dart';
 import 'package:anx_reader/widgets/reading_page/progress_widget.dart';
 import 'package:anx_reader/widgets/reading_page/tts_fab.dart';
-import 'package:anx_reader/widgets/reading_page/tts_widget.dart';
 import 'package:anx_reader/widgets/reading_page/style_widget.dart';
 import 'package:anx_reader/widgets/reading_page/toc_widget.dart';
 import 'package:flutter/cupertino.dart';
@@ -356,15 +355,6 @@ class ReadingPageState extends ConsumerState<ReadingPage>
     });
   }
 
-  Future<void> ttsHandler() async {
-    setState(() {
-      _currentPage = TtsWidget(
-        epubPlayerKey: epubPlayerKey,
-      );
-    });
-  }
-
-
   Future<void> onLoadEnd() async {
     // No-op after AI feature removal
   }
@@ -500,10 +490,6 @@ class ReadingPageState extends ConsumerState<ReadingPage>
                                         styleHandler(setState);
                                       },
                                     ),
-                                    IconButton(
-                                      icon: const Icon(EvaIcons.headphones),
-                                      onPressed: ttsHandler,
-                                    ),
                                   ],
                                 ),
                               ],
@@ -581,7 +567,7 @@ class ReadingPageState extends ConsumerState<ReadingPage>
                   if (bottomBarOffstage)
                     const Positioned(
                       right: 16,
-                      bottom: 24,
+                      bottom: 80,
                       child: TtsFab(),
                     ),
                 ],

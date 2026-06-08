@@ -104,6 +104,7 @@ dependencies:
       ref: 2ac799a6eeb5da74bf5080a2ba2057272fa52b78
   haptic_feedback: ^0.6.4+2
   sherpa_onnx: ^1.13.2
+  flutter_pcm_sound: ^3.3.3
   flutter_animate: ^4.5.2
   phosphor_flutter: ^2.1.0
 

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:anx_reader/config/shared_preference_provider.dart';
@@ -9,15 +8,16 @@ import 'package:anx_reader/service/tts/offline_tts_model_manager.dart';
 import 'package:anx_reader/service/tts/sentence_splitter.dart';
 import 'package:anx_reader/service/tts/tts_debug_logger.dart';
 import 'package:anx_reader/service/tts/tts_engine.dart';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter_pcm_sound/flutter_pcm_sound.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sherpa_onnx/sherpa_onnx.dart';
 
 /// Offline TTS engine based on sherpa-onnx.
 ///
 /// Supports Kokoro, Matcha, and VITS model families with automatic detection.
-/// Uses parallel pre-generation to eliminate sentence-to-sentence delay.
+/// Uses flutter_pcm_sound for PCM streaming playback with pre-generation
+/// to achieve near-zero sentence-to-sentence delay.
 class SherpaOnnxTtsEngine implements TtsEngine {
   OfflineTts? _tts;
   bool _initialized = false;
@@ -32,12 +32,24 @@ class SherpaOnnxTtsEngine implements TtsEngine {
   /// Guard against repeated init failures until dispose() resets.
   bool _initFailed = false;
 
-  AudioPlayer? _player;
+  /// PCM playback state.
+  bool _pcmSetup = false;
+  int _pcmSampleRate = 0;
+
+  /// Pre-generated PCM cache for the next sentence.
+  List<int>? _nextPcmCache;
+  int? _nextPcmSampleRate;
+  String? _nextPcmText;
+
+  /// Completer for drain-wait (remainingFrames == 0).
+  Completer<void>? _drainCompleter;
+
   final StreamController<TtsProgress> _progressController =
       StreamController<TtsProgress>.broadcast();
 
-  /// Optional: map role names to SIDs for multi-voice synthesis.
-  final Map<String, int> roleSidMap = {};
+  /// Peek callback: returns next text WITHOUT triggering highlight.
+  /// Set by adapter, calls JS ttsPrepare().
+  Future<String?> Function()? peekNextText;
 
   SherpaOnnxTtsEngine() {
     try {
@@ -121,7 +133,6 @@ class SherpaOnnxTtsEngine implements TtsEngine {
 
     // ── Locate model files ────────────────────────────────────────
 
-    // Find any .onnx file (model.onnx preferred)
     File? onnxFile;
     try {
       onnxFile = allFiles.whereType<File>().firstWhere(
@@ -137,7 +148,6 @@ class SherpaOnnxTtsEngine implements TtsEngine {
       return;
     }
 
-    // Find tokens.txt
     File? tokensFile;
     try {
       tokensFile = allFiles.whereType<File>().firstWhere(
@@ -153,7 +163,6 @@ class SherpaOnnxTtsEngine implements TtsEngine {
       return;
     }
 
-    // Find voices.bin (Kokoro-specific)
     File? voicesBinFile;
     try {
       voicesBinFile = allFiles.whereType<File>().firstWhere(
@@ -163,7 +172,6 @@ class SherpaOnnxTtsEngine implements TtsEngine {
       voicesBinFile = null;
     }
 
-    // Collect all lexicon*.txt files
     final lexiconFiles = allFiles.whereType<File>().where(
       (f) {
         final name = f.path.split(Platform.pathSeparator).last.toLowerCase();
@@ -172,7 +180,6 @@ class SherpaOnnxTtsEngine implements TtsEngine {
     ).toList();
     final lexiconPaths = lexiconFiles.map((f) => f.path).join(',');
 
-    // Find espeak-ng-data dir exactly; avoid matching dirs like 'model_data'
     String? dataDir;
     try {
       final dataDirMatch = allFiles.whereType<Directory>().firstWhere(
@@ -183,7 +190,6 @@ class SherpaOnnxTtsEngine implements TtsEngine {
       dataDir = null;
     }
 
-    // Find dict dir exactly
     String? dictDir;
     try {
       final dictDirMatch = allFiles.whereType<Directory>().firstWhere(
@@ -221,7 +227,6 @@ class SherpaOnnxTtsEngine implements TtsEngine {
     final metadataKeys = _extractOnnxMetadataKeys(onnxFile.path);
     log.log('SherpaONNX: metadata keys=$metadataKeys');
 
-    // Check for vocoder files (Matcha indicator)
     File? vocoderFile;
     try {
       vocoderFile = allFiles.whereType<File>().firstWhere(
@@ -246,7 +251,6 @@ class SherpaOnnxTtsEngine implements TtsEngine {
     late final OfflineTtsModelConfig modelConfig;
 
     if (hasVoicesBin) {
-      // ── Kokoro ────────────────────────────────────────────────
       log.log('SherpaONNX: detected Kokoro model (voices.bin found)');
 
       if (!onnxFile.path.toLowerCase().contains('int8') && onnxSizeMb > 200) {
@@ -261,7 +265,7 @@ class SherpaOnnxTtsEngine implements TtsEngine {
           dataDir: dataDir ?? '',
           dictDir: dictDir ?? '',
           lexicon: lexiconPaths,
-          lang: '', // 多语言模型留空，避免外国口音
+          lang: '',
           lengthScale: 1.0,
         ),
         numThreads: 4,
@@ -269,36 +273,12 @@ class SherpaOnnxTtsEngine implements TtsEngine {
         provider: 'cpu',
       );
     } else if (vocoderFile != null) {
-      // ── Matcha ────────────────────────────────────────────────
       log.log('SherpaONNX: detected Matcha model (vocoder explicitly found)');
-
-      File? finalVocoder = vocoderFile;
-      if (finalVocoder == null) {
-        // Try to auto-download hifigan_v2.onnx
-        log.log('SherpaONNX: Matcha 缺少 vocoder，尝试下载 hifigan_v2.onnx');
-        try {
-          final appDir = await getApplicationSupportDirectory();
-          final vocoderPath = '${appDir.path}/tts_models/hifigan_v2.onnx';
-          final vocoderFileLocal = File(vocoderPath);
-          if (!await vocoderFileLocal.exists()) {
-            await Dio().download(
-              'https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/hifigan_v2.onnx',
-              vocoderPath,
-            );
-            log.log('SherpaONNX: downloaded hifigan_v2.onnx');
-          }
-          finalVocoder = vocoderFileLocal;
-        } catch (e) {
-          log.log('SherpaONNX: failed to download vocoder: $e');
-          _initFailed = true;
-          return;
-        }
-      }
 
       modelConfig = OfflineTtsModelConfig(
         matcha: OfflineTtsMatchaModelConfig(
           acousticModel: onnxFile.path,
-          vocoder: finalVocoder.path,
+          vocoder: vocoderFile.path,
           tokens: tokensFile.path,
           dataDir: dataDir ?? '',
           dictDir: dictDir ?? '',
@@ -311,8 +291,7 @@ class SherpaOnnxTtsEngine implements TtsEngine {
         provider: 'cpu',
       );
     } else {
-      // ── VITS (default) ────────────────────────────────────────
-      log.log('SherpaONNX: detected VITS model (comment metadata present)');
+      log.log('SherpaONNX: detected VITS model (default fallback)');
 
       modelConfig = OfflineTtsModelConfig(
         vits: OfflineTtsVitsModelConfig(
@@ -382,7 +361,6 @@ class SherpaOnnxTtsEngine implements TtsEngine {
 
     _currentSid = _currentSid.clamp(0, sidCount - 1);
 
-    // Kokoro: default to sid=45 for Chinese voice
     if (hasVoicesBin && _currentSid == 0 && sidCount > 45) {
       _currentSid = 45;
       try {
@@ -416,199 +394,180 @@ class SherpaOnnxTtsEngine implements TtsEngine {
     }
     log.log('SherpaONNX: sentences=${sentences.length}');
 
-    // Pre-generate queue: up to 3 sentences ahead
-    const int prebufferSize = 3;
-    final prebuffer = <Future<GeneratedAudio?>>[];
-
-    // Helper: fill prebuffer from given index
-    void fillPrebuffer(int fromIndex) {
-      while (prebuffer.length < prebufferSize) {
-        final idx = fromIndex + prebuffer.length;
-        if (idx >= sentences.length) break;
-        final s = sentences[idx].trim();
-        prebuffer.add(s.isEmpty ? Future.value(null) : _generateWithRetry(s, log));
-      }
-    }
-
-    // Kick off initial pre-generation
-    fillPrebuffer(0);
-
     for (int i = 0; i < sentences.length; i++) {
       if (_shouldStop) break;
       final sentence = sentences[i];
       if (sentence.trim().isEmpty) continue;
 
-      // Pull audio from prebuffer (should already be ready or in-progress)
-      final future = prebuffer.isNotEmpty ? prebuffer.removeAt(0) : _generateWithRetry(sentence, log);
-      final audio = await future;
-
-      if (_shouldStop) break;
-      if (audio == null || audio.samples.isEmpty) {
-        log.log('SherpaONNX: empty audio for sentence $i, skipped');
-        continue;
+      // 1. Check pre-generated cache or generate PCM
+      List<int>? pcmData;
+      if (_nextPcmCache != null &&
+          _nextPcmSampleRate != null &&
+          _nextPcmText == sentence) {
+        pcmData = _nextPcmCache;
+        _nextPcmCache = null;
+        _nextPcmSampleRate = null;
+        _nextPcmText = null;
+        log.log('SherpaONNX: using cached PCM for sentence $i');
+        // 300ms delay to let WebView render highlight
+        await Future.delayed(const Duration(milliseconds: 300));
+      } else {
+        log.log('SherpaONNX: generating sentence $i');
+        pcmData = await _generatePcm(sentence, log);
+        if (pcmData == null) {
+          log.log('SherpaONNX: failed to generate sentence $i');
+          continue;
+        }
       }
 
-      // Launch next pre-generation before playing
-      fillPrebuffer(i + 1);
+      if (_shouldStop) break;
 
-      // Play
-      await _playAudio(audio);
+      // 2. Setup FlutterPcmSound if needed
+      final sampleRate = _pcmSampleRate;
+      if (!_pcmSetup || _pcmSampleRate != sampleRate) {
+        await FlutterPcmSound.release();
+        await FlutterPcmSound.setup(
+          sampleRate: sampleRate,
+          channelCount: 1,
+        );
+        _pcmSetup = true;
+        _pcmSampleRate = sampleRate;
+        log.log('SherpaONNX: FlutterPcmSound setup @ ${sampleRate}Hz');
+      }
+
+      // 3. Feed PCM data
+      if (pcmData == null) continue;
+      final pcmArray = PcmArrayInt16.fromList(pcmData);
+      await FlutterPcmSound.feed(pcmArray);
+      log.log('SherpaONNX: fed ${pcmData.length} samples');
+
+      // 4. Set up drain-wait callback
+      _drainCompleter = Completer<void>();
+      FlutterPcmSound.setFeedCallback((remainingFrames) {
+        if (remainingFrames == 0 &&
+            _drainCompleter != null &&
+            !_drainCompleter!.isCompleted) {
+          _drainCompleter!.complete();
+        }
+      });
+
+      // 5. Start playback
+      FlutterPcmSound.start();
+      log.log('SherpaONNX: playback started');
+
+      // 6. Pre-generate next sentence
+      if (i + 1 < sentences.length) {
+        _preGenerateNext(log);
+      }
+
+      // 7. Drain wait
+      await _drainCompleter!.future;
+      _drainCompleter = null;
+      log.log('SherpaONNX: sentence $i playback completed');
     }
 
     log.log('SherpaONNX: speak() done');
   }
 
-  /// Generate with digit-to-Chinese fallback on empty result.
-  Future<GeneratedAudio?> _generateWithRetry(String sentence, TtsDebugLogger log) async {
-    if (_tts == null || _shouldStop) return null;
+  /// Generate PCM Int16 data for a sentence.
+  /// Converts digits to Chinese numerals before generating.
+  Future<List<int>?> _generatePcm(String sentence, TtsDebugLogger log) async {
+    if (_tts == null) return null;
 
-    GeneratedAudio? audio;
+    final processedText = _digitsToChinese(sentence);
+    if (processedText != sentence) {
+      log.log('SherpaONNX: digits converted: "$sentence" → "$processedText"');
+    }
+
     try {
-      audio = _tts!.generate(
-        text: sentence,
+      final audio = _tts!.generate(
+        text: processedText,
         sid: _currentSid,
         speed: _currentSpeed,
       );
-    } catch (_) {
-      audio = null;
-    }
 
-    // If generation failed or returned empty, and sentence contains digits,
-    // try converting digits to Chinese numerals and re-generate.
-    if ((audio == null || audio.samples.isEmpty) && _containsDigit(sentence)) {
-      final converted = _digitsToChinese(sentence);
-      if (converted != sentence) {
-        log.log('SherpaONNX: retry with converted digits: $converted');
-        try {
-          audio = _tts!.generate(
-            text: converted,
-            sid: _currentSid,
-            speed: _currentSpeed,
-          );
-        } catch (_) {
-          audio = null;
-        }
+      if (audio.samples.isEmpty) {
+        log.log('SherpaONNX: empty audio for "$processedText"');
+        return null;
       }
-    }
 
-    return audio;
+      // Convert Float32 to Int16
+      final pcmData = List<int>.filled(audio.samples.length, 0);
+      for (int i = 0; i < audio.samples.length; i++) {
+        pcmData[i] = (audio.samples[i].clamp(-1.0, 1.0) * 32767).toInt();
+      }
+
+      _pcmSampleRate = audio.sampleRate;
+      return pcmData;
+    } catch (e, stack) {
+      log.log('SherpaONNX: generate PCM error: $e');
+      log.log(stack.toString());
+      return null;
+    }
   }
 
-  static bool _containsDigit(String s) => s.contains(RegExp(r'[0-9]'));
+  /// Pre-generate PCM for the next sentence in the background.
+  Future<void> _preGenerateNext(TtsDebugLogger log) async {
+    if (peekNextText == null) return;
+
+    // Yield to let playback start first
+    await Future.delayed(Duration.zero);
+    if (_shouldStop) return;
+
+    try {
+      final nextText = await peekNextText!();
+      if (nextText == null || nextText.isEmpty) return;
+
+      final pcm = await _generatePcm(nextText, log);
+      if (pcm != null) {
+        _nextPcmCache = pcm;
+        _nextPcmSampleRate = _pcmSampleRate;
+        _nextPcmText = nextText;
+        log.log('SherpaONNX: pre-generated next sentence: "$nextText"');
+      }
+    } catch (e) {
+      log.log('SherpaONNX: pre-generate error: $e');
+    }
+  }
 
   static final _digitMap = {
-    '0': '零', '1': '一', '2': '二', '3': '三', '4': '四',
-    '5': '五', '6': '六', '7': '七', '8': '八', '9': '九', '.': '点',
+    '0': '零',
+    '1': '一',
+    '2': '二',
+    '3': '三',
+    '4': '四',
+    '5': '五',
+    '6': '六',
+    '7': '七',
+    '8': '八',
+    '9': '九',
+    '.': '点',
   };
 
   static String _digitsToChinese(String text) {
     return text.split('').map((c) => _digitMap[c] ?? c).join();
   }
 
-  Future<AudioPlayer> _ensurePlayer() async {
-    _player ??= AudioPlayer();
-    return _player!;
-  }
-
-  Future<void> _playAudio(GeneratedAudio audio) async {
-    final log = TtsDebugLogger();
-    try {
-      final player = await _ensurePlayer();
-      final wavBytes = _floatSamplesToWav(audio.samples, audio.sampleRate);
-      log.log('SherpaONNX: wav ${wavBytes.length} bytes ready');
-
-      // Calculate audio duration from samples to avoid unreliable
-      // onPlayerComplete events on consecutive plays.
-      final durationMs = (audio.samples.length / audio.sampleRate * 1000).ceil();
-      log.log('SherpaONNX: audio duration=${durationMs}ms');
-
-      await player.play(BytesSource(wavBytes, mimeType: 'audio/wav'));
-      log.log('SherpaONNX: playing audio...');
-
-      // Wait for audio to finish playing, plus a small buffer.
-      await Future.delayed(Duration(milliseconds: durationMs + 150));
-    } catch (e, stack) {
-      log.log('SherpaONNX: playAudio error: $e');
-      log.log(stack.toString());
-    }
-  }
-
-  Uint8List _floatSamplesToWav(Float32List samples, int sampleRate) {
-    final pcmData = Int16List(samples.length);
-    for (int i = 0; i < samples.length; i++) {
-      pcmData[i] = (samples[i].clamp(-1.0, 1.0) * 32767).toInt();
-    }
-
-    final pcmBytes = Uint8List(pcmData.length * 2);
-    for (int i = 0; i < pcmData.length; i++) {
-      pcmBytes[i * 2] = pcmData[i] & 0xFF;
-      pcmBytes[i * 2 + 1] = (pcmData[i] >> 8) & 0xFF;
-    }
-
-    final dataSize = pcmBytes.length;
-    final fileSize = 44 + dataSize;
-    final buffer = ByteData(fileSize);
-
-    buffer.setUint8(0, 0x52);
-    buffer.setUint8(1, 0x49);
-    buffer.setUint8(2, 0x46);
-    buffer.setUint8(3, 0x46);
-    buffer.setUint32(4, fileSize - 8, Endian.little);
-    buffer.setUint8(8, 0x57);
-    buffer.setUint8(9, 0x41);
-    buffer.setUint8(10, 0x56);
-    buffer.setUint8(11, 0x45);
-
-    buffer.setUint8(12, 0x66);
-    buffer.setUint8(13, 0x6D);
-    buffer.setUint8(14, 0x74);
-    buffer.setUint8(15, 0x20);
-    buffer.setUint32(16, 16, Endian.little);
-    buffer.setUint16(20, 1, Endian.little);
-    buffer.setUint16(22, 1, Endian.little);
-    buffer.setUint32(24, sampleRate, Endian.little);
-    buffer.setUint32(28, sampleRate * 2, Endian.little);
-    buffer.setUint16(32, 2, Endian.little);
-    buffer.setUint16(34, 16, Endian.little);
-
-    buffer.setUint8(36, 0x64);
-    buffer.setUint8(37, 0x61);
-    buffer.setUint8(38, 0x74);
-    buffer.setUint8(39, 0x61);
-    buffer.setUint32(40, dataSize, Endian.little);
-
-    for (int i = 0; i < pcmBytes.length; i++) {
-      buffer.setUint8(44 + i, pcmBytes[i]);
-    }
-
-    return buffer.buffer.asUint8List();
-  }
-
-  /// Generate audio and return raw samples (for external use).
-  Future<GeneratedAudio> generateRaw(String text,
-      {int? sid, double? speed}) async {
-    if (_tts == null) throw Exception('TTS not initialized');
-    return _tts!.generate(
-      text: text,
-      sid: sid ?? _currentSid,
-      speed: speed ?? _currentSpeed,
-    );
-  }
-
   @override
   Future<void> stop() async {
     _shouldStop = true;
-    if (_player != null) await _player!.stop();
+    await FlutterPcmSound.release();
+    _pcmSetup = false;
+    _nextPcmCache = null;
+    _nextPcmSampleRate = null;
+    _nextPcmText = null;
   }
 
   @override
   Future<void> pause() async {
-    if (_player != null) await _player!.pause();
+    _shouldStop = true;
+    await FlutterPcmSound.release();
+    _pcmSetup = false;
   }
 
   @override
   Future<void> resume() async {
-    if (_player != null) await _player!.resume();
+    // Resume is handled by adapter calling speak() with current text
   }
 
   @override
@@ -618,7 +577,6 @@ class SherpaOnnxTtsEngine implements TtsEngine {
   Future<List<TtsVoice>> getVoices() async {
     final mgr = OfflineTtsModelManager();
 
-    // Reset _initFailed if model becomes available
     if (_initFailed) {
       final hasModel = await mgr.isAnyModelInstalled();
       if (hasModel) {
@@ -639,7 +597,7 @@ class SherpaOnnxTtsEngine implements TtsEngine {
       }
       if (sidCount <= 0) sidCount = 1;
     } else {
-      return []; // 无模型或初始化失败
+      return [];
     }
 
     String displayName = await mgr.getInstalledModelName();
@@ -683,17 +641,19 @@ class SherpaOnnxTtsEngine implements TtsEngine {
   @override
   Future<void> dispose() async {
     _shouldStop = true;
-    if (_player != null) await _player!.dispose();
-    _player = null;
+    await FlutterPcmSound.release();
+    _pcmSetup = false;
     _tts?.free();
     _tts = null;
     _initialized = false;
     _initFailed = false;
+    _nextPcmCache = null;
+    _nextPcmSampleRate = null;
+    _nextPcmText = null;
     await _progressController.close();
   }
 
   /// Scan the first 1MB of an ONNX file for known VITS metadata keys.
-  /// Used to distinguish VITS (has 'comment') from Matcha (no 'comment').
   Set<String> _extractOnnxMetadataKeys(String filePath) {
     try {
       final file = File(filePath);

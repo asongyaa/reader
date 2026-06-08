@@ -1,5 +1,7 @@
+import 'package:anx_reader/page/reading_page.dart';
 import 'package:anx_reader/service/tts/base_tts.dart';
 import 'package:anx_reader/service/tts/models/tts_voice.dart';
+import 'package:anx_reader/service/tts/sherpa_onnx_tts_engine.dart';
 import 'package:anx_reader/service/tts/system_tts_engine.dart';
 import 'package:anx_reader/service/tts/tts_debug_logger.dart';
 import 'package:anx_reader/service/tts/tts_engine.dart';
@@ -64,6 +66,18 @@ class TtsEngineAdapter extends BaseTts {
         getNextText: getNextText,
         getPrevText: getPrevText,
       );
+    }
+
+    if (engine is SherpaOnnxTtsEngine) {
+      engine.peekNextText = () async {
+        try {
+          final state = epubPlayerKey.currentState;
+          if (state == null) return null;
+          final text = await state.ttsPrepare();
+          if (text.isNotEmpty) return text;
+        } catch (_) {}
+        return null;
+      };
     }
 
     await _engine.init();
@@ -139,7 +153,23 @@ class TtsEngineAdapter extends BaseTts {
   @override
   Future<void> resume() async {
     updateTtsState(TtsStateEnum.playing);
-    await _engine.resume();
+    if (_engine is SherpaOnnxTtsEngine) {
+      // 从当前句重新播放
+      String? current;
+      try {
+        final result = await getHereFunction!();
+        if (result is String && result.isNotEmpty) current = result;
+      } catch (_) {}
+      if (current != null) await _engine.speak(current);
+      // 继续链式播放
+      while (ttsStateNotifier.value == TtsStateEnum.playing) {
+        final result = await getNextTextFunction!();
+        if (result is! String || result.isEmpty) break;
+        await _engine.speak(result);
+      }
+    } else {
+      await _engine.resume();
+    }
   }
 
   @override
