@@ -51,6 +51,8 @@ class OfflineTtsModelManager {
   static final OfflineTtsModelManager _instance = OfflineTtsModelManager._();
   factory OfflineTtsModelManager() => _instance;
 
+  static const String _customModelDir = 'custom_model';
+
   /// The root directory where all models are stored.
   Future<Directory> get _modelsDir async {
     final appDir = await getApplicationSupportDirectory();
@@ -69,15 +71,25 @@ class OfflineTtsModelManager {
   }
 
   /// Check if a specific model is downloaded and valid.
+  /// Relaxed: accepts any *.onnx if model.onnx is missing;
+  /// model.onnx.data is optional.
   Future<bool> isModelDownloaded([TtsModelType type = TtsModelType.vitsMeloZhEn]) async {
     try {
       final dir = await _modelsDir;
       final modelDir = Directory('${dir.path}/${type.dirName}');
       if (!await modelDir.exists()) return false;
-      for (final file in type.expectedFiles) {
-        if (!await File('${modelDir.path}/$file').exists()) return false;
-      }
-      return true;
+
+      // Must have tokens.txt
+      if (!await File('${modelDir.path}/tokens.txt').exists()) return false;
+
+      // Must have model.onnx or any *.onnx
+      final hasModelOnnx = await File('${modelDir.path}/model.onnx').exists();
+      if (hasModelOnnx) return true;
+
+      final anyOnnx = await modelDir
+          .list(recursive: false)
+          .any((f) => f is File && f.path.endsWith('.onnx'));
+      return anyOnnx;
     } catch (_) {
       return false;
     }
@@ -129,8 +141,10 @@ class OfflineTtsModelManager {
   }
 
   /// Import a model archive from local storage.
+  /// The [type] parameter is optional and only used for API compatibility.
+  /// All imported models are extracted to the custom_model/ directory.
   Future<void> importFromFile({
-    required TtsModelType type,
+    TtsModelType? type,
     void Function(double progress)? onProgress,
     void Function(String message)? onStatus,
   }) async {
@@ -146,8 +160,10 @@ class OfflineTtsModelManager {
 
     final sourcePath = result.files.single.path!;
     final sourceName = sourcePath.toLowerCase();
-    if (!sourceName.endsWith('.zip') && !sourceName.endsWith('.tar.bz2') &&
-        !sourceName.endsWith('.bz2') && !sourceName.endsWith('.tar.gz') &&
+    if (!sourceName.endsWith('.zip') &&
+        !sourceName.endsWith('.tar.bz2') &&
+        !sourceName.endsWith('.bz2') &&
+        !sourceName.endsWith('.tar.gz') &&
         !sourceName.endsWith('.tgz')) {
       onStatus?.call('不支持的文件格式，请选择 zip/bz2/tar.bz2 文件');
       return;
@@ -157,35 +173,58 @@ class OfflineTtsModelManager {
     if (onProgress != null) onProgress(0.05);
 
     final dir = await _modelsDir;
-    final copyPath = '${dir.path}/${type.dirName}_import';
+    final customDir = Directory('${dir.path}/$_customModelDir');
+    if (!await customDir.exists()) {
+      await customDir.create(recursive: true);
+    }
+
+    // Clean up old custom model files
+    await _clearDirectory(customDir);
+
+    final copyPath = '${dir.path}/import_temp';
     await File(sourcePath).copy(copyPath);
 
     onStatus?.call('正在后台解压...');
     if (onProgress != null) onProgress(0.1);
 
     // Extract in background to avoid blocking the UI
-    await Isolate.run(() => _extractInBackground(copyPath, dir.path));
+    await Isolate.run(() => _extractInBackground(copyPath, customDir.path));
 
     if (onProgress != null) onProgress(0.85);
 
     // Clean up temp copy
-    try { await File(copyPath).delete(); } catch (_) {}
+    try {
+      await File(copyPath).delete();
+    } catch (_) {}
 
-    // Detect and rename extracted directory
-    final extractedDir = _findExtractedDir(dir.path, type.dirName);
-    if (extractedDir != null && extractedDir != '${dir.path}/${type.dirName}') {
-      final target = Directory('${dir.path}/${type.dirName}');
-      if (await target.exists()) {
-        await target.delete(recursive: true);
+    // Auto-promote single-level directory
+    final entries = await customDir.list().toList();
+    final subdirs = entries.whereType<Directory>().toList();
+    final files = entries.whereType<File>().toList();
+    if (subdirs.length == 1 && files.isEmpty) {
+      // Single subdirectory: promote contents up
+      final sub = subdirs.first;
+      final subEntries = await sub.list().toList();
+      for (final e in subEntries) {
+        final name = e.path.split(Platform.pathSeparator).last;
+        await e.rename('${customDir.path}${Platform.pathSeparator}$name');
       }
-      await Directory(extractedDir).rename(target.path);
+      await sub.delete(recursive: true);
+    }
+
+    // Validate
+    final isValid = await _dirContainsOnnxAndTokens(customDir);
+    if (!isValid) {
+      onStatus?.call('模型文件不完整');
+      if (onProgress != null) onProgress(1.0);
+      throw Exception('模型文件不完整，缺少 .onnx 或 tokens.txt');
     }
 
     if (onProgress != null) onProgress(1.0);
     onStatus?.call('模型导入成功');
   }
 
-  /// Delete a downloaded model.
+  /// Delete a downloaded model by type.
   Future<void> deleteModel([TtsModelType type = TtsModelType.vitsMeloZhEn]) async {
     final dir = await _modelsDir;
     final modelDir = Directory('${dir.path}/${type.dirName}');
@@ -194,11 +233,49 @@ class OfflineTtsModelManager {
     }
   }
 
+  /// Delete all models including custom_model.
+  Future<void> deleteAllModels() async {
+    final dir = await _modelsDir;
+    for (final type in TtsModelType.values) {
+      final modelDir = Directory('${dir.path}/${type.dirName}');
+      if (await modelDir.exists()) {
+        await modelDir.delete(recursive: true);
+      }
+    }
+    final customDir = Directory('${dir.path}/$_customModelDir');
+    if (await customDir.exists()) {
+      await customDir.delete(recursive: true);
+    }
+  }
+
   /// Get the model's estimated size.
   int get estimatedModelSize => 160 * 1024 * 1024;
 
-  /// Find the actual installed model path regardless of type.
+  /// Check if a custom model is installed.
+  Future<bool> isCustomModelInstalled() async {
+    final dir = await _modelsDir;
+    final customDir = Directory('${dir.path}/$_customModelDir');
+    if (!await customDir.exists()) return false;
+    return _dirContainsOnnxAndTokens(customDir);
+  }
+
+  /// Check if any model is installed (predefined or custom).
+  Future<bool> isAnyModelInstalled() async {
+    for (final type in TtsModelType.values) {
+      if (await isModelDownloaded(type)) return true;
+    }
+    if (await isCustomModelInstalled()) return true;
+    return false;
+  }
+
+  /// Find any installed model path: custom first, then predefined.
   Future<String?> findAnyModel() async {
+    final dir = await _modelsDir;
+    final customDir = Directory('${dir.path}/$_customModelDir');
+    if (await customDir.exists() &&
+        await _dirContainsOnnxAndTokens(customDir)) {
+      return customDir.path;
+    }
     for (final type in TtsModelType.values) {
       final path = await getModelPath(type);
       if (path != null) return path;
@@ -206,7 +283,53 @@ class OfflineTtsModelManager {
     return null;
   }
 
+  /// Get a friendly display name for the currently installed model.
+  Future<String> getInstalledModelName() async {
+    final dir = await _modelsDir;
+    final customDir = Directory('${dir.path}/$_customModelDir');
+    if (await customDir.exists() &&
+        await _dirContainsOnnxAndTokens(customDir)) {
+      return 'Custom Model';
+    }
+    for (final type in TtsModelType.values) {
+      if (await isModelDownloaded(type)) {
+        return type.displayName;
+      }
+    }
+    return '';
+  }
+
   // ── Internal helpers ──────────────────────────────────────────
+
+  /// Check if a directory contains at least one .onnx and one tokens.txt.
+  /// If [requireVoicesBin] is true, also requires voices.bin.
+  Future<bool> _dirContainsOnnxAndTokens(Directory dir,
+      {bool requireVoicesBin = false}) async {
+    if (!await dir.exists()) return false;
+    bool hasOnnx = false;
+    bool hasTokens = false;
+    bool hasVoicesBin = false;
+    await for (final entity in dir.list(recursive: true)) {
+      if (entity is! File) continue;
+      final name = entity.path.split(Platform.pathSeparator).last.toLowerCase();
+      if (name.endsWith('.onnx')) hasOnnx = true;
+      if (name == 'tokens.txt') hasTokens = true;
+      if (name == 'voices.bin') hasVoicesBin = true;
+    }
+    if (requireVoicesBin && !hasVoicesBin) return false;
+    return hasOnnx && hasTokens;
+  }
+
+  Future<void> _clearDirectory(Directory dir) async {
+    if (!await dir.exists()) return;
+    await for (final entity in dir.list()) {
+      if (entity is File) {
+        await entity.delete();
+      } else if (entity is Directory) {
+        await entity.delete(recursive: true);
+      }
+    }
+  }
 
   Future<void> _extractArchive(String archivePath, String outputDir) async {
     final bytes = await File(archivePath).readAsBytes();
@@ -254,7 +377,8 @@ void _extractBytesStatic(Uint8List bytes, String archiveName, String outputDir) 
     try {
       archive = TarDecoder().decodeBytes(decompressed);
     } catch (_) {
-      final outBasename = archiveName.split('/').last.replaceAll(RegExp(r'\.(?:bz2|tar\.bz2|tbz2)$', caseSensitive: false), '');
+      final outBasename = archiveName.split('/').last.replaceAll(
+          RegExp(r'\.(?:bz2|tar\.bz2|tbz2)$', caseSensitive: false), '');
       if (outBasename.isEmpty || outBasename == archiveName) {
         File('$outputDir/model_data').writeAsBytesSync(decompressed);
       } else {
@@ -269,12 +393,14 @@ void _extractBytesStatic(Uint8List bytes, String archiveName, String outputDir) 
     archive = TarDecoder().decodeBytes(bytes);
   } else {
     // Last resort: try all decoders
-    try { archive = ZipDecoder().decodeBytes(bytes); }
-    catch (_1) {
+    try {
+      archive = ZipDecoder().decodeBytes(bytes);
+    } catch (_1) {
       try {
         final d = BZip2Decoder().decodeBytes(bytes);
-        try { archive = TarDecoder().decodeBytes(d); }
-        catch (_2) {
+        try {
+          archive = TarDecoder().decodeBytes(d);
+        } catch (_2) {
           File('$outputDir/model_data').writeAsBytesSync(d);
           return;
         }

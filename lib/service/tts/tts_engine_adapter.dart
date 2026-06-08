@@ -1,6 +1,7 @@
 import 'package:anx_reader/service/tts/base_tts.dart';
 import 'package:anx_reader/service/tts/models/tts_voice.dart';
 import 'package:anx_reader/service/tts/system_tts_engine.dart';
+import 'package:anx_reader/service/tts/tts_debug_logger.dart';
 import 'package:anx_reader/service/tts/tts_engine.dart';
 import 'package:flutter/material.dart';
 
@@ -69,18 +70,56 @@ class TtsEngineAdapter extends BaseTts {
   }
 
   @override
+  Future<void> setVoice(String voiceId) async {
+    await _engine.setVoice(voiceId);
+  }
+
+  @override
   Future<void> speak({String? content}) async {
     updateTtsState(TtsStateEnum.playing);
     if (content != null && content.isNotEmpty) {
       await _engine.speak(content);
+      // 单句试听完成后重置状态，避免污染全局阅读页状态
+      if (ttsStateNotifier.value == TtsStateEnum.playing) {
+        updateTtsState(TtsStateEnum.stopped);
+      }
       return;
     }
-    // Fetch from JS callbacks
-    if (getHereFunction == null || getNextTextFunction == null) return;
-    await getHereFunction!();
-    final text = await getNextTextFunction!();
-    if (text is String && text.isNotEmpty) {
-      await _engine.speak(text);
+    if (getHereFunction == null || getNextTextFunction == null) {
+      TtsDebugLogger().log('TtsEngineAdapter: missing callbacks, abort speak');
+      return;
+    }
+    try { await getHereFunction!(); } catch (_) {}
+
+    String? text;
+    try {
+      final result = await getNextTextFunction!();
+      if (result is String) text = result;
+    } catch (e) {
+      TtsDebugLogger().log('TtsEngineAdapter: getNextText error: $e');
+    }
+    if (text == null || text.isEmpty) {
+      TtsDebugLogger().log('TtsEngineAdapter: no initial text, abort speak');
+      return;
+    }
+
+    await _engine.speak(text);
+
+    if (_engine.autoChainsSentences) return;
+
+    // 引擎不自动链式播放，适配器自己驱动
+    while (ttsStateNotifier.value == TtsStateEnum.playing) {
+      String? next;
+      try {
+        final result = await getNextTextFunction!();
+        if (result is String) next = result;
+      } catch (e) {
+        TtsDebugLogger().log('TtsEngineAdapter: chain getNextText error: $e');
+        break;
+      }
+      if (next == null || next.isEmpty) break;
+      if (ttsStateNotifier.value != TtsStateEnum.playing) break;
+      await _engine.speak(next);
     }
   }
 

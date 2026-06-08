@@ -42,6 +42,15 @@ class TtsHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
   }
 
+  Future<void> switchEngineType(String engineType, {bool forceRecreate = false}) async {
+    await _ttsFactory.switchEngineType(engineType, forceRecreate: forceRecreate);
+    if (_getCurrentText != null &&
+        _getNextText != null &&
+        _getPrevText != null) {
+      await tts.init(_getCurrentText!, _getNextText!, _getPrevText!);
+    }
+  }
+
   Future<void> _initAudioSession() async {
     final session = await AudioSession.instance;
 

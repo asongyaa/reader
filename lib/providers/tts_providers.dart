@@ -25,6 +25,7 @@ class TtsService extends _$TtsService {
 @riverpod
 Future<List<TtsVoice>> ttsVoices(Ref ref) async {
   ref.watch(ttsServiceProvider);
+  ref.watch(ttsEngineTypeProvider);
   final tts = TtsFactory().current;
   return await tts.getVoices();
 }

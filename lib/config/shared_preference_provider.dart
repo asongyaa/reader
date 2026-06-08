@@ -512,6 +512,15 @@ class Prefs extends ChangeNotifier {
     return prefs.getString('ttsEngineType') ?? 'system';
   }
 
+  set offlineTtsSid(int sid) {
+    prefs.setInt('offlineTtsSid', sid);
+    notifyListeners();
+  }
+
+  int get offlineTtsSid {
+    return prefs.getInt('offlineTtsSid') ?? 0;
+  }
+
   Map<String, dynamic> getOnlineTtsConfig(String serviceId) {
     String? json = prefs.getString('onlineTtsConfig_$serviceId');
     if (json == null) return {};

@@ -24,6 +24,7 @@ class _RecentPageState extends ConsumerState<RecentPage>
     super.build(context);
     final cs = Theme.of(context).colorScheme;
     final booksAsync = ref.watch(bookListProvider);
+    final topPadding = MediaQuery.of(context).padding.top;
 
     Widget body;
     if (booksAsync.isLoading) {
@@ -58,6 +59,17 @@ class _RecentPageState extends ConsumerState<RecentPage>
             .where((b) => b.updateTime.isAfter(now.subtract(const Duration(days: 90))) &&
                 !b.updateTime.isAfter(now.subtract(const Duration(days: 30))))
             .toList();
+        final last6Months = finished
+            .where((b) => b.updateTime.isAfter(now.subtract(const Duration(days: 180))) &&
+                !b.updateTime.isAfter(now.subtract(const Duration(days: 90))))
+            .toList();
+        final lastYear = finished
+            .where((b) => b.updateTime.isAfter(now.subtract(const Duration(days: 365))) &&
+                !b.updateTime.isAfter(now.subtract(const Duration(days: 180))))
+            .toList();
+        final older = finished
+            .where((b) => !b.updateTime.isAfter(now.subtract(const Duration(days: 365))))
+            .toList();
 
         final recentAdded = all
             .where((b) => b.readingPercentage <= 0.02)
@@ -68,11 +80,14 @@ class _RecentPageState extends ConsumerState<RecentPage>
             thisWeek.isNotEmpty ||
             thisMonth.isNotEmpty ||
             last3Months.isNotEmpty ||
+            last6Months.isNotEmpty ||
+            lastYear.isNotEmpty ||
+            older.isNotEmpty ||
             recentAdded.isNotEmpty;
 
         body = ListView(
           controller: _scrollController,
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 80),
+          padding: EdgeInsets.fromLTRB(16, topPadding + 8, 16, 80),
           children: [
             if (current != null) _buildCurrent(context, current, cs),
             if (current != null) const SizedBox(height: 16),
@@ -84,10 +99,25 @@ class _RecentPageState extends ConsumerState<RecentPage>
               _buildSection(context, '本月已读', thisMonth, cs),
               const SizedBox(height: 12),
             ],
-            if (last3Months.isNotEmpty)
+            if (last3Months.isNotEmpty) ...[
               _buildSection(context, '三月内已读', last3Months, cs),
+              const SizedBox(height: 12),
+            ],
+            if (last6Months.isNotEmpty) ...[
+              _buildSection(context, '半年内已读', last6Months, cs),
+              const SizedBox(height: 12),
+            ],
+            if (lastYear.isNotEmpty) ...[
+              _buildSection(context, '近一年已读', lastYear, cs),
+              const SizedBox(height: 12),
+            ],
+            if (older.isNotEmpty) ...[
+              _buildSection(context, '更早', older, cs),
+              const SizedBox(height: 12),
+            ],
             if (recentAdded.isNotEmpty) ...[
-              if (current != null || thisWeek.isNotEmpty || thisMonth.isNotEmpty || last3Months.isNotEmpty)
+              if (current != null || thisWeek.isNotEmpty || thisMonth.isNotEmpty ||
+                  last3Months.isNotEmpty || last6Months.isNotEmpty || lastYear.isNotEmpty || older.isNotEmpty)
                 const SizedBox(height: 12),
               _buildSection(context, '最近添加', recentAdded, cs),
             ],

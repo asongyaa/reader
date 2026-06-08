@@ -44,6 +44,12 @@ abstract class TtsEngine {
 
   /// Release all resources.
   Future<void> dispose();
+
+  /// Whether the engine internally chains to the next sentence after
+  /// finishing the current one. System TTS does this via flutter_tts'
+  /// completion handler; offline engines like SherpaONNX do not, and rely on
+  /// the adapter to call back into the reader for the next sentence.
+  bool get autoChainsSentences => false;
 }
 
 /// Progress information during TTS playback.

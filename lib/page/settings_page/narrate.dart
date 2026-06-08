@@ -78,7 +78,9 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
           await tts.speak(content: text);
         }
       } else if (tts is TtsEngineAdapter) {
-        // New TTS engine architecture — TtsEngineAdapter wraps the actual engine
+        if (voiceShortName != null) {
+          await tts.setVoice(voiceShortName);
+        }
         await tts.init(() {}, () async => text, () async => text);
         await tts.speak(content: text);
       }
@@ -292,6 +294,15 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
   }
 
   void _selectVoiceModel(String shortName) {
+    final engineType = ref.read(ttsEngineTypeProvider);
+    if (engineType == TtsEngineTypeEnum.sherpaOnnx) {
+      TtsHandler().tts.setVoice(shortName);
+      setState(() {
+        selectedVoiceModel = shortName;
+      });
+      return;
+    }
+
     final serviceId = ref.read(ttsServiceProvider);
     final provider = tts_svc.getTtsService(serviceId).provider;
     final hasVoiceField = provider.getConfig().containsKey('voice');
@@ -376,10 +387,24 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
                   ],
                   selected: {ref.watch(ttsEngineTypeProvider)},
                   onSelectionChanged:
-                      (Set<TtsEngineTypeEnum> selected) {
+                      (Set<TtsEngineTypeEnum> selected) async {
+                    final newEngine = selected.first;
+                    await TtsHandler().switchEngineType(newEngine.name);
                     ref
                         .read(ttsEngineTypeProvider.notifier)
-                        .setEngine(selected.first);
+                        .setEngine(newEngine);
+                    setState(() {
+                      _showVoiceList = false;
+                      if (newEngine == TtsEngineTypeEnum.sherpaOnnx) {
+                        selectedVoiceModel = 'sid_${Prefs().offlineTtsSid}';
+                      } else {
+                        final serviceId = Prefs().ttsService;
+                        selectedVoiceModel = tts_svc
+                            .getTtsService(serviceId)
+                            .provider
+                            .getSelectedVoice();
+                      }
+                    });
                   },
                 ),
               ),
@@ -393,7 +418,24 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
             title: const Text('Offline Model'),
             tiles: [
               CustomSettingsTile(
-                child: _ModelDownloadCard(),
+                child: _ModelDownloadCard(
+                  onModelDeleted: () {
+                    setState(() {
+                      selectedVoiceModel = null;
+                      _showVoiceList = false;
+                    });
+                  },
+                  onModelChanged: () async {
+                    await TtsFactory().switchEngineType(
+                      TtsEngineTypeEnum.sherpaOnnx.name,
+                      forceRecreate: true,
+                    );
+                    setState(() {
+                      _showVoiceList = false;
+                      selectedVoiceModel = 'sid_${Prefs().offlineTtsSid}';
+                    });
+                  },
+                ),
               ),
             ],
           ).animate().fadeIn(
@@ -828,6 +870,11 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
 
 /// Card widget for managing offline TTS model download/delete/status.
 class _ModelDownloadCard extends StatefulWidget {
+  final VoidCallback? onModelDeleted;
+  final VoidCallback? onModelChanged;
+
+  const _ModelDownloadCard({this.onModelDeleted, this.onModelChanged});
+
   @override
   State<_ModelDownloadCard> createState() => _ModelDownloadCardState();
 }
@@ -835,6 +882,7 @@ class _ModelDownloadCard extends StatefulWidget {
 class _ModelDownloadCardState extends State<_ModelDownloadCard> {
   final OfflineTtsModelManager _modelManager = OfflineTtsModelManager();
   bool? _isDownloaded;
+  String _modelName = '';
   bool _isDownloading = false;
   double _downloadProgress = 0.0;
   bool _isImporting = false;
@@ -848,10 +896,12 @@ class _ModelDownloadCardState extends State<_ModelDownloadCard> {
   }
 
   Future<void> _checkModelStatus() async {
-    final downloaded = await _modelManager.isModelDownloaded();
+    final downloaded = await _modelManager.isAnyModelInstalled();
+    final name = await _modelManager.getInstalledModelName();
     if (mounted) {
       setState(() {
         _isDownloaded = downloaded;
+        _modelName = name;
       });
     }
   }
@@ -873,12 +923,13 @@ class _ModelDownloadCardState extends State<_ModelDownloadCard> {
           }
         },
       );
+      await _checkModelStatus();
       if (mounted) {
         setState(() {
           _isDownloading = false;
-          _isDownloaded = true;
           _downloadProgress = 1.0;
         });
+        widget.onModelChanged?.call();
       }
     } catch (e) {
       if (mounted) {
@@ -919,7 +970,6 @@ class _ModelDownloadCardState extends State<_ModelDownloadCard> {
 
     try {
       await _modelManager.importFromFile(
-        type: TtsModelType.vitsAishell3,
         onProgress: (progress) {
           if (mounted) {
             setState(() { _importProgress = progress; });
@@ -932,52 +982,30 @@ class _ModelDownloadCardState extends State<_ModelDownloadCard> {
         },
       );
 
-      // Validate the imported model
-      final isValid = await _modelManager.isModelDownloaded(TtsModelType.vitsAishell3);
+      await _checkModelStatus();
       if (mounted) {
         setState(() {
           _isImporting = false;
-          _isDownloaded = isValid;
         });
-        if (isValid) {
-          SmartDialog.show(
-            useSystem: true,
-            animationType: SmartAnimationType.centerFade_otherSlide,
-            builder: (dialogContext) => AlertDialog(
-              title: Row(children: [
-                Icon(Icons.check_circle, color: Colors.green),
-                const SizedBox(width: 8),
-                const Text('导入成功'),
-              ]),
-              content: const Text('离线语音模型已就绪，即可开始使用。'),
-              actions: [
-                TextButton(
-                  onPressed: () => SmartDialog.dismiss(),
-                  child: Text(L10n.of(dialogContext).commonOk),
-                ),
-              ],
-            ),
-          );
-        } else {
-          SmartDialog.show(
-            useSystem: true,
-            animationType: SmartAnimationType.centerFade_otherSlide,
-            builder: (dialogContext) => AlertDialog(
-              title: Row(children: [
-                Icon(Icons.error, color: Theme.of(dialogContext).colorScheme.error),
-                const SizedBox(width: 8),
-                const Text('文件异常'),
-              ]),
-              content: const Text('模型文件不完整，缺少 model.onnx 或 tokens.txt，请检查后重新导入。'),
-              actions: [
-                TextButton(
-                  onPressed: () => SmartDialog.dismiss(),
-                  child: Text(L10n.of(dialogContext).commonOk),
-                ),
-              ],
-            ),
-          );
-        }
+        widget.onModelChanged?.call();
+        SmartDialog.show(
+          useSystem: true,
+          animationType: SmartAnimationType.centerFade_otherSlide,
+          builder: (dialogContext) => AlertDialog(
+            title: Row(children: [
+              Icon(Icons.check_circle, color: Colors.green),
+              const SizedBox(width: 8),
+              const Text('导入成功'),
+            ]),
+            content: const Text('离线语音模型已就绪，即可开始使用。'),
+            actions: [
+              TextButton(
+                onPressed: () => SmartDialog.dismiss(),
+                child: Text(L10n.of(dialogContext).commonOk),
+              ),
+            ],
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -1005,11 +1033,11 @@ class _ModelDownloadCardState extends State<_ModelDownloadCard> {
   }
 
   Future<void> _deleteModel() async {
-    await _modelManager.deleteModel();
+    await _modelManager.deleteAllModels();
+    await _checkModelStatus();
     if (mounted) {
-      setState(() {
-        _isDownloaded = false;
-      });
+      setState(() {});
+      widget.onModelDeleted?.call();
     }
   }
 
@@ -1046,9 +1074,23 @@ class _ModelDownloadCardState extends State<_ModelDownloadCard> {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                _isDownloaded! ? 'Model Ready' : 'Offline TTS Model',
-                style: theme.textTheme.titleSmall,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _isDownloaded! ? '模型已安装' : '离线 TTS 模型',
+                      style: theme.textTheme.titleSmall,
+                    ),
+                    if (_isDownloaded! && _modelName.isNotEmpty)
+                      Text(
+                        _modelName,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -1072,8 +1114,8 @@ class _ModelDownloadCardState extends State<_ModelDownloadCard> {
             const SizedBox(height: 12),
             Text(
               _isDownloaded!
-                  ? '离线语音模型已安装'
-                  : '下载或导入 ~160MB 离线语音模型，\n即可开始使用离线 TTS。',
+                  ? '离线语音模型已就绪'
+                  : '下载或导入离线语音模型，\n即可开始使用离线 TTS。',
               style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
             ),
           ],

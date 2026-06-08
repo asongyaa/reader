@@ -38,6 +38,9 @@ class SystemTtsEngine implements TtsEngine {
   @override
   bool get requiresModelDownload => false;
 
+  @override
+  bool get autoChainsSentences => true;
+
   // ── TtsEngine interface ───────────────────────────────────────
 
   @override

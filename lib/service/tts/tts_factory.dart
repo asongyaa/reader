@@ -1,6 +1,9 @@
 import 'package:anx_reader/config/shared_preference_provider.dart';
 import 'package:anx_reader/service/tts/base_tts.dart';
+import 'package:anx_reader/service/tts/sherpa_onnx_tts_engine.dart';
 import 'package:anx_reader/service/tts/system_tts_engine.dart';
+import 'package:anx_reader/service/tts/tts_debug_logger.dart';
+import 'package:anx_reader/service/tts/tts_engine.dart';
 import 'package:anx_reader/service/tts/tts_engine_adapter.dart';
 import 'package:flutter/material.dart';
 
@@ -28,12 +31,16 @@ class TtsFactory {
   }
 
   BaseTts createTts() {
-    // Force SystemTTS as the stable default.
-    // SherpaOnnx initBindings() has a known native crash on Android
-    // (https://github.com/k2-fsa/sherpa-onnx/issues/1915).
-    // Offline TTS remains available via settings but is not the default
-    // until the upstream library fix lands.
-    return TtsEngineAdapter(SystemTtsEngine());
+    final engineType = Prefs().ttsEngineType;
+    final type = TtsEngineTypeEnum.values.firstWhere(
+      (e) => e.name == engineType,
+      orElse: () => TtsEngineTypeEnum.system,
+    );
+    TtsDebugLogger().log('TtsFactory: creating engine type=${type.name}');
+    return switch (type) {
+      TtsEngineTypeEnum.sherpaOnnx => TtsEngineAdapter(SherpaOnnxTtsEngine()),
+      TtsEngineTypeEnum.system => TtsEngineAdapter(SystemTtsEngine()),
+    };
   }
 
   Future<void> switchTtsType(String serviceId) async {
@@ -46,6 +53,18 @@ class TtsFactory {
     }
 
     Prefs().ttsService = serviceId;
+    _currentTts = createTts();
+  }
+
+  Future<void> switchEngineType(String engineType, {bool forceRecreate = false}) async {
+    if (!forceRecreate && _lastEngineType == engineType && _currentTts != null) return;
+    if (_currentTts != null) {
+      await _currentTts!.stop();
+      await _currentTts!.dispose();
+      _currentTts = null;
+    }
+    Prefs().ttsEngineType = engineType;
+    _lastEngineType = engineType;
     _currentTts = createTts();
   }
 

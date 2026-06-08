@@ -41,4 +41,8 @@ abstract class BaseTts {
   String? get currentVoiceText;
 
   Future<List<TtsVoice>> getVoices();
+
+  /// Select a voice by [voiceId] (engine-specific identifier).
+  /// Default no-op; engines that support voice selection override this.
+  Future<void> setVoice(String voiceId) async {}
 }
