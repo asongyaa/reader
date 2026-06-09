@@ -8,6 +8,7 @@ import 'package:anx_reader/l10n/generated/L10n.dart';
 import 'package:anx_reader/models/reading_info.dart';
 import 'package:anx_reader/page/reading_page.dart';
 import 'package:anx_reader/page/settings_page/subpage/fonts.dart';
+import 'package:anx_reader/widgets/common/anx_choice_chips.dart';
 import 'package:anx_reader/widgets/common/anx_segmented_button.dart';
 import 'package:anx_reader/widgets/step_slider.dart';
 import 'package:flutter/material.dart';
@@ -36,42 +37,36 @@ class _ReadingMoreSettingsState extends State<ReadingMoreSettings> {
             children: [
               Text(L10n.of(context).readingPageConvertChinese,
                   style: Theme.of(context).textTheme.titleMedium),
-              Row(
-                children: [
-                  Expanded(
-                    child: AnxSegmentedButton<ConvertChineseMode>(
-                      segments: [
-                        SegmentButtonItem(
-                          label: L10n.of(context).readingPageOriginal,
-                          value: ConvertChineseMode.none,
-                          icon: const Text("原", style: iconStyle),
-                        ),
-                        SegmentButtonItem(
-                          label: L10n.of(context).readingPageSimplified,
-                          value: ConvertChineseMode.t2s,
-                          icon: const Text("简", style: iconStyle),
-                        ),
-                        SegmentButtonItem(
-                          label: L10n.of(context).readingPageTraditional,
-                          value: ConvertChineseMode.s2t,
-                          icon: const Text("繁", style: iconStyle),
-                        ),
-                      ],
-                      selected: {Prefs().readingRules.convertChineseMode},
-                      onSelectionChanged: (value) {
-                        setState(() {
-                          // Prefs().readingRules.convertChineseMode =
-                          //     ConvertChineseMode.values.byName(value.first);
-                          Prefs().readingRules = Prefs()
-                              .readingRules
-                              .copyWith(convertChineseMode: value.first);
-                          epubPlayerKey.currentState
-                              ?.changeReadingRules(Prefs().readingRules);
-                        });
-                      },
-                    ),
+              AnxChoiceChips<ConvertChineseMode>(
+                segments: [
+                  SegmentButtonItem(
+                    label: L10n.of(context).readingPageOriginal,
+                    value: ConvertChineseMode.none,
+                    icon: const Text("原", style: iconStyle),
+                  ),
+                  SegmentButtonItem(
+                    label: L10n.of(context).readingPageSimplified,
+                    value: ConvertChineseMode.t2s,
+                    icon: const Text("简", style: iconStyle),
+                  ),
+                  SegmentButtonItem(
+                    label: L10n.of(context).readingPageTraditional,
+                    value: ConvertChineseMode.s2t,
+                    icon: const Text("繁", style: iconStyle),
                   ),
                 ],
+                selected: {Prefs().readingRules.convertChineseMode},
+                onSelectionChanged: (value) {
+                  setState(() {
+                    // Prefs().readingRules.convertChineseMode =
+                    //     ConvertChineseMode.values.byName(value.first);
+                    Prefs().readingRules = Prefs()
+                        .readingRules
+                        .copyWith(convertChineseMode: value.first);
+                    epubPlayerKey.currentState
+                        ?.changeReadingRules(Prefs().readingRules);
+                  });
+                },
               ),
               Row(
                 children: [
@@ -137,40 +132,34 @@ class _ReadingMoreSettingsState extends State<ReadingMoreSettings> {
           children: [
             Text(L10n.of(context).readingPageColumnCount,
                 style: Theme.of(context).textTheme.titleMedium),
-            Row(
-              children: [
-                Expanded(
-                  child: AnxSegmentedButton<int>(
-                    segments: [
-                      SegmentButtonItem(
-                        label: L10n.of(context).readingPageAuto,
-                        value: 0,
-                        icon: const Icon(Icons.auto_awesome),
-                      ),
-                      SegmentButtonItem(
-                        label: L10n.of(context).readingPageSingle,
-                        value: 1,
-                        icon: const Icon(EvaIcons.book),
-                      ),
-                      SegmentButtonItem(
-                        label: L10n.of(context).readingPageDouble,
-                        value: 2,
-                        icon: const Icon(EvaIcons.book_open),
-                      ),
-                    ],
-                    selected: {Prefs().bookStyle.maxColumnCount},
-                    onSelectionChanged: (value) {
-                      setState(() {
-                        final newBookStyle = Prefs()
-                            .bookStyle
-                            .copyWith(maxColumnCount: value.first);
-                        Prefs().saveBookStyleToPrefs(newBookStyle);
-                        epubPlayerKey.currentState?.changeStyle(newBookStyle);
-                      });
-                    },
-                  ),
+            AnxChoiceChips<int>(
+              segments: [
+                SegmentButtonItem(
+                  label: L10n.of(context).readingPageAuto,
+                  value: 0,
+                  icon: const Icon(Icons.auto_awesome),
+                ),
+                SegmentButtonItem(
+                  label: L10n.of(context).readingPageSingle,
+                  value: 1,
+                  icon: const Icon(EvaIcons.book),
+                ),
+                SegmentButtonItem(
+                  label: L10n.of(context).readingPageDouble,
+                  value: 2,
+                  icon: const Icon(EvaIcons.book_open),
                 ),
               ],
+              selected: {Prefs().bookStyle.maxColumnCount},
+              onSelectionChanged: (value) {
+                setState(() {
+                  final newBookStyle = Prefs()
+                      .bookStyle
+                      .copyWith(maxColumnCount: value.first);
+                  Prefs().saveBookStyleToPrefs(newBookStyle);
+                  epubPlayerKey.currentState?.changeStyle(newBookStyle);
+                });
+              },
             ),
           ],
         ),
@@ -283,42 +272,36 @@ class _ReadingMoreSettingsState extends State<ReadingMoreSettings> {
           children: [
             Text(L10n.of(context).readingPageWritingDirection,
                 style: Theme.of(context).textTheme.titleMedium),
-            Row(
-              children: [
-                Expanded(
-                  child: AnxSegmentedButton<WritingModeEnum>(
-                    segments: [
-                      SegmentButtonItem(
-                        label: L10n.of(context).readingPageWritingDirectionAuto,
-                        value: WritingModeEnum.auto,
-                        icon: const Icon(EvaIcons.activity_outline),
-                      ),
-                      SegmentButtonItem(
-                        label: L10n.of(context)
-                            .readingPageWritingDirectionVertical,
-                        value: WritingModeEnum.verticalRl,
-                        icon: const Icon(Bootstrap.arrows_vertical),
-                      ),
-                      SegmentButtonItem(
-                        label: L10n.of(context)
-                            .readingPageWritingDirectionHorizontal,
-                        value: WritingModeEnum.horizontalTb,
-                        icon: const Icon(Bootstrap.arrows),
-                      ),
-                    ],
-                    selected: {Prefs().writingMode},
-                    onSelectionChanged: (value) {
-                      setState(() {
-                        final newBookStyle =
-                            Prefs().bookStyle.copyWith(maxColumnCount: 1);
-                        Prefs().saveBookStyleToPrefs(newBookStyle);
-                        Prefs().writingMode = value.first;
-                        epubPlayerKey.currentState?.changeStyle(newBookStyle);
-                      });
-                    },
-                  ),
+            AnxChoiceChips<WritingModeEnum>(
+              segments: [
+                SegmentButtonItem(
+                  label: L10n.of(context).readingPageWritingDirectionAuto,
+                  value: WritingModeEnum.auto,
+                  icon: const Icon(EvaIcons.activity_outline),
+                ),
+                SegmentButtonItem(
+                  label: L10n.of(context)
+                      .readingPageWritingDirectionVertical,
+                  value: WritingModeEnum.verticalRl,
+                  icon: const Icon(Bootstrap.arrows_vertical),
+                ),
+                SegmentButtonItem(
+                  label: L10n.of(context)
+                      .readingPageWritingDirectionHorizontal,
+                  value: WritingModeEnum.horizontalTb,
+                  icon: const Icon(Bootstrap.arrows),
                 ),
               ],
+              selected: {Prefs().writingMode},
+              onSelectionChanged: (value) {
+                setState(() {
+                  final newBookStyle =
+                      Prefs().bookStyle.copyWith(maxColumnCount: 1);
+                  Prefs().saveBookStyleToPrefs(newBookStyle);
+                  Prefs().writingMode = value.first;
+                  epubPlayerKey.currentState?.changeStyle(newBookStyle);
+                });
+              },
             ),
           ],
         ),
@@ -339,48 +322,42 @@ class _ReadingMoreSettingsState extends State<ReadingMoreSettings> {
                       .textTheme
                       .bodySmall
                       ?.copyWith(color: Colors.grey)),
-            Row(
-              children: [
-                Expanded(
-                  child: AnxSegmentedButton<TranslationModeEnum>(
-                    enabled: isReading,
-                    segments: [
-                      SegmentButtonItem(
-                        label: L10n.of(context).readingPageOriginal,
-                        value: TranslationModeEnum.off,
-                        icon: const Icon(Icons.translate_outlined),
-                      ),
-                      SegmentButtonItem(
-                        label: L10n.of(context).translationOnly,
-                        value: TranslationModeEnum.translationOnly,
-                        icon: const Icon(Icons.g_translate),
-                      ),
-                      SegmentButtonItem(
-                        label: L10n.of(context).bilingual,
-                        value: TranslationModeEnum.bilingual,
-                        icon: const Icon(Icons.compare),
-                      ),
-                    ],
-                    selected: {
-                      epubPlayerKey.currentState != null
-                          ? Prefs().getBookTranslationMode(
-                              epubPlayerKey.currentState!.widget.book.id)
-                          : TranslationModeEnum.off
-                    },
-                    onSelectionChanged: (value) {
-                      setState(() {
-                        final currentBookId =
-                            epubPlayerKey.currentState!.widget.book.id;
-                        final newMode = value.first;
-
-                        Prefs().setBookTranslationMode(currentBookId, newMode);
-
-                        epubPlayerKey.currentState?.setTranslationMode(newMode);
-                      });
-                    },
-                  ),
+            AnxChoiceChips<TranslationModeEnum>(
+              enabled: isReading,
+              segments: [
+                SegmentButtonItem(
+                  label: L10n.of(context).readingPageOriginal,
+                  value: TranslationModeEnum.off,
+                  icon: const Icon(Icons.translate_outlined),
+                ),
+                SegmentButtonItem(
+                  label: L10n.of(context).translationOnly,
+                  value: TranslationModeEnum.translationOnly,
+                  icon: const Icon(Icons.g_translate),
+                ),
+                SegmentButtonItem(
+                  label: L10n.of(context).bilingual,
+                  value: TranslationModeEnum.bilingual,
+                  icon: const Icon(Icons.compare),
                 ),
               ],
+              selected: {
+                epubPlayerKey.currentState != null
+                    ? Prefs().getBookTranslationMode(
+                        epubPlayerKey.currentState!.widget.book.id)
+                    : TranslationModeEnum.off
+              },
+              onSelectionChanged: (value) {
+                setState(() {
+                  final currentBookId =
+                      epubPlayerKey.currentState!.widget.book.id;
+                  final newMode = value.first;
+
+                  Prefs().setBookTranslationMode(currentBookId, newMode);
+
+                  epubPlayerKey.currentState?.setTranslationMode(newMode);
+                });
+              },
             ),
           ],
         ),
@@ -680,52 +657,46 @@ class _ReadingMoreSettingsState extends State<ReadingMoreSettings> {
                   style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
               // Quick toggle: Off / Light / Dark
-              Row(
-                children: [
-                  Expanded(
-                    child: AnxSegmentedButton<String>(
-                      segments: [
-                        SegmentButtonItem(
-                          label: L10n.of(context).codeHighlightOff,
-                          value: 'off',
-                          icon: const Icon(Icons.code_off),
-                        ),
-                        SegmentButtonItem(
-                          label: L10n.of(context).codeHighlightLight,
-                          value: 'light',
-                          icon: const Icon(Icons.light_mode),
-                        ),
-                        SegmentButtonItem(
-                          label: L10n.of(context).codeHighlightDark,
-                          value: 'dark',
-                          icon: const Icon(Icons.dark_mode),
-                        ),
-                      ],
-                      selected: {
-                        Prefs().codeHighlightTheme == CodeHighlightThemeEnum.off
-                            ? 'off'
-                            : Prefs().codeHighlightTheme.isLight
-                                ? 'light'
-                                : 'dark'
-                      },
-                      onSelectionChanged: (value) {
-                        setState(() {
-                          if (value.first == 'off') {
-                            Prefs().codeHighlightTheme =
-                                CodeHighlightThemeEnum.off;
-                          } else if (value.first == 'light') {
-                            Prefs().codeHighlightTheme =
-                                CodeHighlightThemeEnum.defaultTheme;
-                          } else {
-                            Prefs().codeHighlightTheme =
-                                CodeHighlightThemeEnum.vsDark;
-                          }
-                          epubPlayerKey.currentState?.changeStyle(null);
-                        });
-                      },
-                    ),
+              AnxChoiceChips<String>(
+                segments: [
+                  SegmentButtonItem(
+                    label: L10n.of(context).codeHighlightOff,
+                    value: 'off',
+                    icon: const Icon(Icons.code_off),
+                  ),
+                  SegmentButtonItem(
+                    label: L10n.of(context).codeHighlightLight,
+                    value: 'light',
+                    icon: const Icon(Icons.light_mode),
+                  ),
+                  SegmentButtonItem(
+                    label: L10n.of(context).codeHighlightDark,
+                    value: 'dark',
+                    icon: const Icon(Icons.dark_mode),
                   ),
                 ],
+                selected: {
+                  Prefs().codeHighlightTheme == CodeHighlightThemeEnum.off
+                      ? 'off'
+                      : Prefs().codeHighlightTheme.isLight
+                          ? 'light'
+                          : 'dark'
+                },
+                onSelectionChanged: (value) {
+                  setState(() {
+                    if (value.first == 'off') {
+                      Prefs().codeHighlightTheme =
+                          CodeHighlightThemeEnum.off;
+                    } else if (value.first == 'light') {
+                      Prefs().codeHighlightTheme =
+                          CodeHighlightThemeEnum.defaultTheme;
+                    } else {
+                      Prefs().codeHighlightTheme =
+                          CodeHighlightThemeEnum.vsDark;
+                    }
+                    epubPlayerKey.currentState?.changeStyle(null);
+                  });
+                },
               ),
               // Detailed theme selection (only show if not off)
               if (Prefs().codeHighlightTheme != CodeHighlightThemeEnum.off) ...[
