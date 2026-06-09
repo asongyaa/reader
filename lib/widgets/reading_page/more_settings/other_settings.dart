@@ -9,6 +9,7 @@ import 'package:anx_reader/widgets/common/anx_segmented_button.dart';
 import 'package:anx_reader/widgets/reading_page/more_settings/page_turning/diagram.dart';
 import 'package:anx_reader/widgets/reading_page/more_settings/page_turning/page_turn_dropdown.dart';
 import 'package:anx_reader/widgets/reading_page/more_settings/page_turning/types_and_icons.dart';
+import 'package:anx_reader/widgets/step_slider.dart';
 import 'package:flutter/material.dart';
 
 class OtherSettings extends StatefulWidget {
@@ -22,34 +23,73 @@ class _OtherSettingsState extends State<OtherSettings> {
   @override
   Widget build(BuildContext context) {
     Widget screenTimeout() {
-      return ListTile(
-        contentPadding: EdgeInsets.zero,
-        title: Text(
-          L10n.of(context).readingPageScreenTimeout,
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        leadingAndTrailingTextStyle: TextStyle(
-          fontSize: 16,
-          color: Theme.of(context).textTheme.bodyLarge!.color,
-        ),
-        subtitle: Row(
-          children: [
-            Text(L10n.of(context).commonMinutes(Prefs().awakeTime)),
-            Expanded(
-              child: Slider(
-                  min: 0,
-                  max: 60,
-                  label: Prefs().awakeTime.toString(),
-                  value: Prefs().awakeTime.toDouble(),
-                  onChangeEnd: (value) => setState(() {
-                        readingPageKey.currentState
-                            ?.setAwakeTimer(value.toInt());
-                      }),
-                  onChanged: (value) => setState(() {
-                        Prefs().awakeTime = value.toInt();
-                      })),
+      return InkWell(
+        onTap: () {
+          showModalBottomSheet(
+            context: context,
+            builder: (ctx) => StatefulBuilder(
+              builder: (ctx, setSheetState) => Padding(
+                padding: EdgeInsets.fromLTRB(
+                    24, 24, 24, MediaQuery.of(ctx).padding.bottom + 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      L10n.of(context).readingPageScreenTimeout,
+                      style: Theme.of(ctx)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 20),
+                    StepSlider(
+                      value: Prefs().awakeTime.toDouble(),
+                      min: 0,
+                      max: 60,
+                      step: 5,
+                      onChanged: (v) {
+                        setSheetState(() {});
+                        setState(() {
+                          Prefs().awakeTime = v.toInt();
+                          readingPageKey.currentState
+                              ?.setAwakeTimer(v.toInt());
+                        });
+                      },
+                      thumbLabel: (v) => v == 0 ? '关' : '${v.toInt()}',
+                      tickLabels: const [15, 30, 45],
+                      leftText: '关',
+                      rightText: '60m',
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ],
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  L10n.of(context).readingPageScreenTimeout,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              Text(
+                Prefs().awakeTime == 0
+                    ? '关'
+                    : L10n.of(context).commonMinutes(Prefs().awakeTime),
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
         ),
       );
     }

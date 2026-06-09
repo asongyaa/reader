@@ -4,59 +4,10 @@ import 'package:anx_reader/enums/writing_mode.dart';
 import 'package:anx_reader/l10n/generated/L10n.dart';
 import 'package:anx_reader/models/book_style.dart';
 import 'package:anx_reader/page/reading_page.dart';
-import 'package:anx_reader/widgets/icon_and_text.dart';
 import 'package:anx_reader/widgets/reading_page/more_settings/custom_css_editor.dart';
+import 'package:anx_reader/widgets/step_slider.dart';
 import 'package:flutter/material.dart';
 import 'package:icons_plus/icons_plus.dart';
-
-// Reusable style slider widget that can be disabled
-class StyleSlider extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final double value;
-  final ValueChanged<double> onChanged;
-  final double min;
-  final double max;
-  final int divisions;
-  final String Function(double) labelFormatter;
-  final bool enabled;
-
-  const StyleSlider({
-    super.key,
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.onChanged,
-    required this.min,
-    required this.max,
-    required this.divisions,
-    required this.labelFormatter,
-    this.enabled = true,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        IconAndText(
-          icon: Icon(icon),
-          text: label,
-        ),
-        Expanded(
-          child: Slider(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            value: value,
-            onChanged: enabled ? onChanged : null,
-            min: min,
-            max: max,
-            divisions: divisions,
-            label: labelFormatter(value),
-          ),
-        ),
-      ],
-    );
-  }
-}
 
 class StyleSettings extends StatefulWidget {
   const StyleSettings({super.key});
@@ -66,6 +17,56 @@ class StyleSettings extends StatefulWidget {
 }
 
 class _StyleSettingsState extends State<StyleSettings> {
+  void _showSliderSheet({
+    required BuildContext context,
+    required String title,
+    required double value,
+    required double min,
+    required double max,
+    required double step,
+    required ValueChanged<double> onChanged,
+    required String Function(double) thumbLabel,
+    List<double>? tickLabels,
+    String? leftText,
+    String? rightText,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+              24, 24, 24, MediaQuery.of(ctx).padding.bottom + 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title,
+                  style: Theme.of(ctx)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+              StepSlider(
+                value: value,
+                min: min,
+                max: max,
+                step: step,
+                onChanged: (v) {
+                  setSheetState(() {});
+                  onChanged(v);
+                },
+                thumbLabel: thumbLabel,
+                tickLabels: tickLabels,
+                leftText: leftText,
+                rightText: rightText,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     Widget useBookStylesSwitch() {
@@ -87,168 +88,366 @@ class _StyleSettingsState extends State<StyleSettings> {
 
     Widget textIndent(BookStyle bookStyle, StateSetter setState) {
       bool enabled = !Prefs().useBookStyles;
-      return StyleSlider(
-        icon: Icons.format_indent_increase,
-        label: L10n.of(context).readingPageIndent,
-        value: bookStyle.indent,
-        onChanged: (double value) {
-          setState(() {
-            bookStyle.indent = value;
-            epubPlayerKey.currentState?.changeStyle(bookStyle);
-            Prefs().saveBookStyleToPrefs(bookStyle);
-          });
-        },
-        min: -0.5,
-        max: 8,
-        divisions: 17,
-        labelFormatter: (value) => value < 0
-            ? L10n.of(context).readingPageIndentNoChange
-            : value.toStringAsFixed(1),
-        enabled: enabled,
+      return InkWell(
+        onTap: enabled
+            ? () => _showSliderSheet(
+                  context: context,
+                  title: L10n.of(context).readingPageIndent,
+                  value: bookStyle.indent,
+                  min: -0.5,
+                  max: 8,
+                  step: 0.5,
+                  onChanged: (v) {
+                    setState(() {
+                      bookStyle.indent = v;
+                      epubPlayerKey.currentState?.changeStyle(bookStyle);
+                      Prefs().saveBookStyleToPrefs(bookStyle);
+                    });
+                  },
+                  thumbLabel: (v) => v < 0
+                      ? L10n.of(context).readingPageIndentNoChange
+                      : v.toStringAsFixed(1),
+                  tickLabels: const [2, 4, 6],
+                  leftText: '无',
+                  rightText: '8',
+                )
+            : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          child: Row(
+            children: [
+              const Icon(Icons.format_indent_increase, size: 20),
+              const SizedBox(width: 8),
+              Text(L10n.of(context).readingPageIndent),
+              const Spacer(),
+              Text(
+                bookStyle.indent < 0
+                    ? L10n.of(context).readingPageIndentNoChange
+                    : bookStyle.indent.toStringAsFixed(1),
+                style: TextStyle(
+                    color: enabled
+                        ? Theme.of(context).colorScheme.onSurfaceVariant
+                        : Theme.of(context).disabledColor),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: enabled
+                    ? Theme.of(context).colorScheme.onSurfaceVariant
+                    : Theme.of(context).disabledColor,
+              ),
+            ],
+          ),
+        ),
       );
     }
 
     Widget sideMarginSlider(BookStyle bookStyle, StateSetter setState) {
-      return StyleSlider(
-        icon: Prefs().writingMode == WritingModeEnum.verticalRl
-            ? Bootstrap.arrows_vertical
-            : Bootstrap.arrows,
-        label: Prefs().writingMode == WritingModeEnum.verticalRl
-            ? L10n.of(context).readingPageVerticleMargin
-            : L10n.of(context).readingPageSideMargin,
-        value: bookStyle.sideMargin,
-        onChanged: (double value) {
-          setState(() {
-            bookStyle.sideMargin = value;
-            epubPlayerKey.currentState?.changeStyle(bookStyle);
-            Prefs().saveBookStyleToPrefs(bookStyle);
-          });
-        },
-        min: 0,
-        max: 20,
-        divisions: 20,
-        labelFormatter: (value) => value.toStringAsFixed(1),
-        enabled: true, // Side margin is always enabled
+      return InkWell(
+        onTap: () => _showSliderSheet(
+          context: context,
+          title: Prefs().writingMode == WritingModeEnum.verticalRl
+              ? L10n.of(context).readingPageVerticleMargin
+              : L10n.of(context).readingPageSideMargin,
+          value: bookStyle.sideMargin,
+          min: 0,
+          max: 20,
+          step: 1,
+          onChanged: (v) {
+            setState(() {
+              bookStyle.sideMargin = v;
+              epubPlayerKey.currentState?.changeStyle(bookStyle);
+              Prefs().saveBookStyleToPrefs(bookStyle);
+            });
+          },
+          thumbLabel: (v) => v.toStringAsFixed(0),
+          tickLabels: const [5, 10, 15],
+          leftText: '0',
+          rightText: '20',
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          child: Row(
+            children: [
+              Icon(
+                Prefs().writingMode == WritingModeEnum.verticalRl
+                    ? Bootstrap.arrows_vertical
+                    : Bootstrap.arrows,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(Prefs().writingMode == WritingModeEnum.verticalRl
+                  ? L10n.of(context).readingPageVerticleMargin
+                  : L10n.of(context).readingPageSideMargin),
+              const Spacer(),
+              Text(
+                bookStyle.sideMargin.toStringAsFixed(0),
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    Widget topMarginSlider(BookStyle bookStyle, StateSetter setState) {
+      final label = Prefs().writingMode == WritingModeEnum.verticalRl
+          ? L10n.of(context).readingPageRightMargin
+          : L10n.of(context).readingPageTopMargin;
+      return InkWell(
+        onTap: () => _showSliderSheet(
+          context: context,
+          title: label,
+          value: bookStyle.topMargin,
+          min: 0,
+          max: 200,
+          step: 20,
+          onChanged: (v) {
+            setState(() {
+              bookStyle.topMargin = v;
+              epubPlayerKey.currentState?.changeStyle(bookStyle);
+              Prefs().saveBookStyleToPrefs(bookStyle);
+            });
+          },
+          thumbLabel: (v) => (v / 20).toStringAsFixed(0),
+          tickLabels: const [60, 100, 140],
+          leftText: '0',
+          rightText: '200',
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          child: Row(
+            children: [
+              Icon(
+                Prefs().writingMode == WritingModeEnum.verticalRl
+                    ? Bootstrap.chevron_bar_right
+                    : Bootstrap.chevron_bar_up,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(label),
+              const Spacer(),
+              Text(
+                (bookStyle.topMargin / 20).toStringAsFixed(0),
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    Widget bottomMarginSlider(BookStyle bookStyle, StateSetter setState) {
+      final label = Prefs().writingMode == WritingModeEnum.verticalRl
+          ? L10n.of(context).readingPageLeftMargin
+          : L10n.of(context).readingPageBottomMargin;
+      return InkWell(
+        onTap: () => _showSliderSheet(
+          context: context,
+          title: label,
+          value: bookStyle.bottomMargin,
+          min: 0,
+          max: 200,
+          step: 20,
+          onChanged: (v) {
+            setState(() {
+              bookStyle.bottomMargin = v;
+              epubPlayerKey.currentState?.changeStyle(bookStyle);
+              Prefs().saveBookStyleToPrefs(bookStyle);
+            });
+          },
+          thumbLabel: (v) => (v / 20).toStringAsFixed(0),
+          tickLabels: const [60, 100, 140],
+          leftText: '0',
+          rightText: '200',
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          child: Row(
+            children: [
+              Icon(
+                Prefs().writingMode == WritingModeEnum.verticalRl
+                    ? Bootstrap.chevron_bar_left
+                    : Bootstrap.chevron_bar_down,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(label),
+              const Spacer(),
+              Text(
+                (bookStyle.bottomMargin / 20).toStringAsFixed(0),
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
       );
     }
 
     Widget letterSpacingSlider(BookStyle bookStyle, StateSetter setState) {
       bool enabled = !Prefs().useBookStyles;
-      return StyleSlider(
-        icon: Icons.compare_arrows,
-        label: L10n.of(context).readingPageLetterSpacing,
-        value: bookStyle.letterSpacing,
-        onChanged: (double value) {
-          setState(() {
-            bookStyle.letterSpacing = value;
-            epubPlayerKey.currentState?.changeStyle(bookStyle);
-            Prefs().saveBookStyleToPrefs(bookStyle);
-          });
-        },
-        min: -3,
-        max: 7,
-        divisions: 10,
-        labelFormatter: (value) => value.toString(),
-        enabled: enabled,
+      return InkWell(
+        onTap: enabled
+            ? () => _showSliderSheet(
+                  context: context,
+                  title: L10n.of(context).readingPageLetterSpacing,
+                  value: bookStyle.letterSpacing,
+                  min: -3,
+                  max: 7,
+                  step: 1,
+                  onChanged: (v) {
+                    setState(() {
+                      bookStyle.letterSpacing = v;
+                      epubPlayerKey.currentState?.changeStyle(bookStyle);
+                      Prefs().saveBookStyleToPrefs(bookStyle);
+                    });
+                  },
+                  thumbLabel: (v) => v.toString(),
+                  tickLabels: const [0, 3],
+                  leftText: '-3',
+                  rightText: '7',
+                )
+            : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          child: Row(
+            children: [
+              const Icon(Icons.compare_arrows, size: 20),
+              const SizedBox(width: 8),
+              Text(L10n.of(context).readingPageLetterSpacing),
+              const Spacer(),
+              Text(
+                bookStyle.letterSpacing.toString(),
+                style: TextStyle(
+                    color: enabled
+                        ? Theme.of(context).colorScheme.onSurfaceVariant
+                        : Theme.of(context).disabledColor),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: enabled
+                    ? Theme.of(context).colorScheme.onSurfaceVariant
+                    : Theme.of(context).disabledColor,
+              ),
+            ],
+          ),
+        ),
       );
-    }
-
-    Row topBottomMarginSlider(BookStyle bookStyle, StateSetter setState) {
-      return Row(children: [
-        Prefs().writingMode == WritingModeEnum.verticalRl
-            ? IconAndText(
-                icon: const Icon(Bootstrap.chevron_bar_right),
-                text: L10n.of(context).readingPageRightMargin,
-              )
-            : IconAndText(
-                icon: const Icon(Bootstrap.chevron_bar_up),
-                text: L10n.of(context).readingPageTopMargin,
-              ),
-        Expanded(
-          child: Slider(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            value: bookStyle.topMargin,
-            onChanged: (double value) {
-              setState(() {
-                bookStyle.topMargin = value;
-                epubPlayerKey.currentState?.changeStyle(bookStyle);
-                Prefs().saveBookStyleToPrefs(bookStyle);
-              });
-            },
-            min: 0,
-            max: 200,
-            divisions: 10,
-            label: (bookStyle.topMargin / 20).toStringAsFixed(0),
-          ),
-        ),
-        Prefs().writingMode == WritingModeEnum.verticalRl
-            ? IconAndText(
-                icon: const Icon(Bootstrap.chevron_bar_left),
-                text: L10n.of(context).readingPageLeftMargin,
-              )
-            : IconAndText(
-                icon: const Icon(Bootstrap.chevron_bar_down),
-                text: L10n.of(context).readingPageBottomMargin,
-              ),
-        Expanded(
-          child: Slider(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            value: bookStyle.bottomMargin,
-            onChanged: (double value) {
-              setState(() {
-                bookStyle.bottomMargin = value;
-                epubPlayerKey.currentState?.changeStyle(bookStyle);
-                Prefs().saveBookStyleToPrefs(bookStyle);
-              });
-            },
-            min: 0,
-            max: 200,
-            divisions: 10,
-            label: (bookStyle.bottomMargin / 20).toStringAsFixed(0),
-          ),
-        ),
-      ]);
     }
 
     Widget fontWeightSlider(BookStyle bookStyle, StateSetter setState) {
       bool enabled = !Prefs().useBookStyles;
-      return StyleSlider(
-        icon: Icons.format_bold,
-        label: L10n.of(context).readingPageFontWeight,
-        value: bookStyle.fontWeight,
-        onChanged: (double value) {
-          setState(() {
-            bookStyle.fontWeight = value;
-            epubPlayerKey.currentState?.changeStyle(bookStyle);
-            Prefs().saveBookStyleToPrefs(bookStyle);
-          });
-        },
-        min: 100,
-        max: 900,
-        divisions: 8,
-        labelFormatter: (value) => value.toString(),
-        enabled: enabled,
+      return InkWell(
+        onTap: enabled
+            ? () => _showSliderSheet(
+                  context: context,
+                  title: L10n.of(context).readingPageFontWeight,
+                  value: bookStyle.fontWeight,
+                  min: 100,
+                  max: 900,
+                  step: 100,
+                  onChanged: (v) {
+                    setState(() {
+                      bookStyle.fontWeight = v;
+                      epubPlayerKey.currentState?.changeStyle(bookStyle);
+                      Prefs().saveBookStyleToPrefs(bookStyle);
+                    });
+                  },
+                  thumbLabel: (v) => v.toStringAsFixed(0),
+                  tickLabels: const [300, 500, 700],
+                  leftText: '细',
+                  rightText: '粗',
+                )
+            : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          child: Row(
+            children: [
+              const Icon(Icons.format_bold, size: 20),
+              const SizedBox(width: 8),
+              Text(L10n.of(context).readingPageFontWeight),
+              const Spacer(),
+              Text(
+                bookStyle.fontWeight.toStringAsFixed(0),
+                style: TextStyle(
+                    color: enabled
+                        ? Theme.of(context).colorScheme.onSurfaceVariant
+                        : Theme.of(context).disabledColor),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: enabled
+                    ? Theme.of(context).colorScheme.onSurfaceVariant
+                    : Theme.of(context).disabledColor,
+              ),
+            ],
+          ),
+        ),
       );
     }
 
     Widget headingFontSizeSlider(BookStyle bookStyle, StateSetter setState) {
       bool enabled = !Prefs().useBookStyles;
-      return StyleSlider(
-        icon: Icons.title,
-        label: L10n.of(context).headingFontSize,
-        value: bookStyle.headingFontSize,
-        onChanged: (double value) {
-          setState(() {
-            bookStyle.headingFontSize = value;
-            epubPlayerKey.currentState?.changeStyle(bookStyle);
-            Prefs().saveBookStyleToPrefs(bookStyle);
-          });
-        },
-        min: 0.5,
-        max: 2.0,
-        divisions: 15,
-        labelFormatter: (value) => value.toStringAsFixed(1),
-        enabled: enabled,
+      return InkWell(
+        onTap: enabled
+            ? () => _showSliderSheet(
+                  context: context,
+                  title: L10n.of(context).headingFontSize,
+                  value: bookStyle.headingFontSize,
+                  min: 0.5,
+                  max: 2.0,
+                  step: 0.1,
+                  onChanged: (v) {
+                    setState(() {
+                      bookStyle.headingFontSize = v;
+                      epubPlayerKey.currentState?.changeStyle(bookStyle);
+                      Prefs().saveBookStyleToPrefs(bookStyle);
+                    });
+                  },
+                  thumbLabel: (v) => v.toStringAsFixed(1),
+                  tickLabels: const [1.0, 1.5],
+                  leftText: '小',
+                  rightText: '大',
+                )
+            : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+          child: Row(
+            children: [
+              const Icon(Icons.title, size: 20),
+              const SizedBox(width: 8),
+              Text(L10n.of(context).headingFontSize),
+              const Spacer(),
+              Text(
+                bookStyle.headingFontSize.toStringAsFixed(1),
+                style: TextStyle(
+                    color: enabled
+                        ? Theme.of(context).colorScheme.onSurfaceVariant
+                        : Theme.of(context).disabledColor),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: enabled
+                    ? Theme.of(context).colorScheme.onSurfaceVariant
+                    : Theme.of(context).disabledColor,
+              ),
+            ],
+          ),
+        ),
       );
     }
 
@@ -324,7 +523,8 @@ class _StyleSettingsState extends State<StyleSettings> {
           children: [
             textIndent(bookStyle, setState),
             sideMarginSlider(bookStyle, setState),
-            topBottomMarginSlider(bookStyle, setState),
+            topMarginSlider(bookStyle, setState),
+            bottomMarginSlider(bookStyle, setState),
             letterSpacingSlider(bookStyle, setState),
             fontWeightSlider(bookStyle, setState),
             headingFontSizeSlider(bookStyle, setState),

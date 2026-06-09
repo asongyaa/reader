@@ -4,6 +4,7 @@ import 'package:anx_reader/widgets/common/anx_segmented_button.dart';
 import 'package:anx_reader/widgets/settings/settings_title.dart';
 import 'package:anx_reader/widgets/settings/simple_dialog.dart';
 import 'package:anx_reader/widgets/settings/theme_mode.dart';
+import 'package:anx_reader/widgets/step_slider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:provider/provider.dart';
@@ -150,25 +151,77 @@ class _AppearanceSettingState extends State<AppearanceSetting> {
             title: Text(L10n.of(context).settingsBookshelfCover),
             tiles: [
               CustomSettingsTile(
-                  child: ListTile(
-                title: Text(L10n.of(context).settingsBookshelfCoverWidth),
-                subtitle: Row(
-                  children: [
-                    Text(Prefs().bookCoverWidth.toStringAsFixed(0)),
-                    Expanded(
-                      child: Slider(
-                        value: Prefs().bookCoverWidth,
-                        onChanged: (value) {
-                          setState(() {
-                            Prefs().bookCoverWidth = value;
-                          });
-                        },
-                        max: 260,
-                        min: 80,
-                        divisions: 18,
+                  child: InkWell(
+                onTap: () {
+                  showModalBottomSheet(
+                    context: context,
+                    builder: (ctx) => StatefulBuilder(
+                      builder: (ctx, setSheetState) => Padding(
+                        padding: EdgeInsets.fromLTRB(24, 24, 24,
+                            MediaQuery.of(ctx).padding.bottom + 24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              L10n.of(context).settingsBookshelfCoverWidth,
+                              style: Theme.of(ctx)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 20),
+                            StepSlider(
+                              value: Prefs().bookCoverWidth,
+                              min: 80,
+                              max: 260,
+                              step: 10,
+                              onChanged: (v) {
+                                setSheetState(() {});
+                                setState(() {
+                                  Prefs().bookCoverWidth = v;
+                                });
+                              },
+                              thumbLabel: (v) => v.toStringAsFixed(0),
+                              tickLabels: const [120, 160, 200],
+                              leftText: '小',
+                              rightText: '大',
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ],
+                  );
+                },
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          L10n.of(context).settingsBookshelfCoverWidth,
+                          style: TextStyle(
+                              fontSize: 16,
+                              color: Theme.of(context).colorScheme.onSurface),
+                        ),
+                      ),
+                      Text(
+                        Prefs().bookCoverWidth.toStringAsFixed(0),
+                        style: TextStyle(
+                            fontSize: 14,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(Icons.chevron_right,
+                          size: 20,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurfaceVariant),
+                    ],
+                  ),
                 ),
               )),
               CustomSettingsTile(
@@ -280,37 +333,57 @@ Future<void> showColorPickerDialog(BuildContext context) async {
 
   Color pickedColor = currentColor;
 
-  await showDialog<void>(
+  await showModalBottomSheet<void>(
     context: context,
     builder: (BuildContext context) {
-      return AlertDialog(
-        title: Text(L10n.of(context).settingsAppearanceThemeColor),
-        content: SingleChildScrollView(
-          child: ColorPicker(
-            pickerColor: pickedColor,
-            onColorChanged: (color) {
-              pickedColor = color;
-            },
-            enableAlpha: false,
-            displayThumbColor: true,
-            pickerAreaHeightPercent: 0.8,
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                L10n.of(context).settingsAppearanceThemeColor,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: ColorPicker(
+                    pickerColor: pickedColor,
+                    onColorChanged: (color) {
+                      pickedColor = color;
+                    },
+                    enableAlpha: false,
+                    displayThumbColor: true,
+                    pickerAreaHeightPercent: 0.6,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    child: Text(L10n.of(context).commonCancel),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                  TextButton(
+                    child: Text(L10n.of(context).commonOk),
+                    onPressed: () {
+                      prefsProvider.saveThemeToPrefs(pickedColor.value);
+                      Navigator.of(context).pop();
+                    },
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
-        actions: <Widget>[
-          TextButton(
-            child: Text(L10n.of(context).commonCancel),
-            onPressed: () {
-              Navigator.of(context).pop();
-            },
-          ),
-          TextButton(
-            child: Text(L10n.of(context).commonOk),
-            onPressed: () {
-              prefsProvider.saveThemeToPrefs(pickedColor.value);
-              Navigator.of(context).pop();
-            },
-          ),
-        ],
       );
     },
   );

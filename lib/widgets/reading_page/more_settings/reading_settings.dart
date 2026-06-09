@@ -9,6 +9,7 @@ import 'package:anx_reader/models/reading_info.dart';
 import 'package:anx_reader/page/reading_page.dart';
 import 'package:anx_reader/page/settings_page/subpage/fonts.dart';
 import 'package:anx_reader/widgets/common/anx_segmented_button.dart';
+import 'package:anx_reader/widgets/step_slider.dart';
 import 'package:flutter/material.dart';
 import 'package:icons_plus/icons_plus.dart';
 
@@ -177,46 +178,98 @@ class _ReadingMoreSettingsState extends State<ReadingMoreSettings> {
     }
 
     Widget columnThreshold() {
+      bool enabled = Prefs().bookStyle.maxColumnCount == 0;
       return StatefulBuilder(
         builder: (context, setState) => Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Text(L10n.of(context).readingPageColumnThreshold,
-                    style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(width: 8),
-                Text(
-                  '${Prefs().bookStyle.columnThreshold.toInt()}px',
-                  style: Theme.of(context).textTheme.bodySmall,
+            InkWell(
+              onTap: enabled
+                  ? () {
+                      showModalBottomSheet(
+                        context: context,
+                        builder: (ctx) => StatefulBuilder(
+                          builder: (ctx, setSheetState) => Padding(
+                            padding: EdgeInsets.fromLTRB(24, 24, 24,
+                                MediaQuery.of(ctx).padding.bottom + 24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  L10n.of(context).readingPageColumnThreshold,
+                                  style: Theme.of(ctx)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(
+                                          fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 20),
+                                StepSlider(
+                                  value: Prefs().bookStyle.columnThreshold,
+                                  min: 400,
+                                  max: 1200,
+                                  step: 20,
+                                  onChanged: (v) {
+                                    setSheetState(() {});
+                                    setState(() {
+                                      final newBookStyle = Prefs()
+                                          .bookStyle
+                                          .copyWith(columnThreshold: v);
+                                      Prefs()
+                                          .saveBookStyleToPrefs(newBookStyle);
+                                      epubPlayerKey.currentState
+                                          ?.changeStyle(newBookStyle);
+                                    });
+                                  },
+                                  thumbLabel: (v) => '${v.toInt()}px',
+                                  tickLabels: const [600, 800, 1000],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+                  : null,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Row(
+                  children: [
+                    Text(
+                        L10n.of(context).readingPageColumnThreshold,
+                        style: Theme.of(context).textTheme.titleMedium),
+                    const Spacer(),
+                    Text(
+                      '${Prefs().bookStyle.columnThreshold.toInt()}px',
+                      style: TextStyle(
+                        color: enabled
+                            ? Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant
+                            : Theme.of(context).disabledColor,
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right,
+                      color: enabled
+                          ? Theme.of(context)
+                              .colorScheme
+                              .onSurfaceVariant
+                          : Theme.of(context).disabledColor,
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
-            if (Prefs().bookStyle.maxColumnCount == 0)
+            if (enabled)
               Text(
                 L10n.of(context).readingPageColumnThresholdTip,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Colors.grey,
                     ),
               ),
-            Slider(
-              value: Prefs().bookStyle.columnThreshold,
-              min: 400,
-              max: 1200,
-              divisions: 40,
-              label: '${Prefs().bookStyle.columnThreshold.toInt()}px',
-              onChanged: Prefs().bookStyle.maxColumnCount == 0
-                  ? (value) {
-                      setState(() {
-                        final newBookStyle =
-                            Prefs().bookStyle.copyWith(columnThreshold: value);
-                        Prefs().saveBookStyleToPrefs(newBookStyle);
-                        epubPlayerKey.currentState?.changeStyle(newBookStyle);
-                      });
-                    }
-                  : null,
-            ),
           ],
         ),
       );
@@ -379,36 +432,79 @@ class _ReadingMoreSettingsState extends State<ReadingMoreSettings> {
             epubPlayerKey.currentState?.changeReadingInfo();
           }
 
-          Widget buildSettingSlider({
+          Widget buildSettingItem({
             required String label,
             required double value,
             required double min,
             required double max,
-            required int divisions,
+            required double step,
+            required List<double> tickLabels,
             required ValueChanged<double> onChanged,
           }) {
-            return Row(
-              children: [
-                SizedBox(
-                  width: 96,
-                  child: Text(label),
-                ),
-                Expanded(
-                  child: Slider(
-                    value: value,
-                    min: min,
-                    max: max,
-                    divisions: divisions,
-                    label: value.toStringAsFixed(0),
-                    onChanged: (newValue) {
-                      setState(() {
-                        onChanged(newValue);
-                        epubPlayerKey.currentState?.changeReadingInfo();
-                      });
-                    },
+            return InkWell(
+              onTap: () {
+                showModalBottomSheet(
+                  context: context,
+                  builder: (ctx) => StatefulBuilder(
+                    builder: (ctx, setSheetState) => Padding(
+                      padding: EdgeInsets.fromLTRB(
+                          24, 24, 24, MediaQuery.of(ctx).padding.bottom + 24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            label,
+                            style: Theme.of(ctx)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 20),
+                          StepSlider(
+                            value: value,
+                            min: min,
+                            max: max,
+                            step: step,
+                            onChanged: (v) {
+                              setSheetState(() {});
+                              setState(() {
+                                onChanged(v);
+                                epubPlayerKey.currentState
+                                    ?.changeReadingInfo();
+                              });
+                            },
+                            thumbLabel: (v) => v.toStringAsFixed(0),
+                            tickLabels: tickLabels,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
+                );
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Row(
+                  children: [
+                    Text(label),
+                    const Spacer(),
+                    Text(
+                      value.toStringAsFixed(0),
+                      style: TextStyle(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurfaceVariant),
+                    ),
+                    Icon(
+                      Icons.chevron_right,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurfaceVariant,
+                    ),
+                  ],
                 ),
-              ],
+              ),
             );
           }
 
@@ -467,39 +563,43 @@ class _ReadingMoreSettingsState extends State<ReadingMoreSettings> {
                     ),
                   ],
                 ),
-                buildSettingSlider(
+                buildSettingItem(
                   label: L10n.of(context).readingSettingsMargin,
                   value: section.verticalMargin,
                   min: 0,
                   max: 80,
-                  divisions: 40,
+                  step: 2,
+                  tickLabels: const [20, 40, 60],
                   onChanged: (value) =>
                       onChanged(section.copyWith(verticalMargin: value)),
                 ),
-                buildSettingSlider(
+                buildSettingItem(
                   label: L10n.of(context).readingPageLeftMargin,
                   value: section.leftMargin,
                   min: 0,
                   max: 80,
-                  divisions: 40,
+                  step: 2,
+                  tickLabels: const [20, 40, 60],
                   onChanged: (value) =>
                       onChanged(section.copyWith(leftMargin: value)),
                 ),
-                buildSettingSlider(
+                buildSettingItem(
                   label: L10n.of(context).readingPageRightMargin,
                   value: section.rightMargin,
                   min: 0,
                   max: 80,
-                  divisions: 40,
+                  step: 2,
+                  tickLabels: const [20, 40, 60],
                   onChanged: (value) =>
                       onChanged(section.copyWith(rightMargin: value)),
                 ),
-                buildSettingSlider(
+                buildSettingItem(
                   label: L10n.of(context).readingPageFontSize,
                   value: section.fontSize,
                   min: 8,
                   max: 24,
-                  divisions: 16,
+                  step: 1,
+                  tickLabels: const [12, 16, 20],
                   onChanged: (value) =>
                       onChanged(section.copyWith(fontSize: value)),
                 ),
