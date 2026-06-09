@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:icons_plus/icons_plus.dart';
+import 'package:anx_reader/widgets/step_slider.dart';
 
 class TtsPlayerSheet extends ConsumerStatefulWidget {
   const TtsPlayerSheet({super.key});
@@ -108,19 +109,19 @@ class _TtsPlayerSheetState extends ConsumerState<TtsPlayerSheet> {
 
     return Column(
       children: [
-        // Cover
+        // Cover (enlarged)
         if (book != null)
           Padding(
             padding: const EdgeInsets.only(top: 8, bottom: 20),
             child: BookCover(
               book: book,
-              height: 180,
-              width: 130,
+              height: 240,
+              width: 170,
               radius: 12,
             ),
           )
         else
-          const SizedBox(height: 180),
+          const SizedBox(height: 240),
         // Book title
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -148,7 +149,166 @@ class _TtsPlayerSheetState extends ConsumerState<TtsPlayerSheet> {
             overflow: TextOverflow.ellipsis,
           ),
         ),
+        const SizedBox(height: 12),
+        // Quick actions (rate / timer chips)
+        _buildQuickActions(),
       ],
+    );
+  }
+
+  Widget _buildQuickActions() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _actionChip(
+            label: '语速 ${rate.toStringAsFixed(1)}x',
+            icon: EvaIcons.activity,
+            onTap: _showRateSheet,
+          ),
+          const SizedBox(width: 16),
+          _actionChip(
+            label: stopSeconds > 0
+                ? '定时 ${(stopSeconds / 60).ceil()}min'
+                : '定时',
+            icon: EvaIcons.clock_outline,
+            onTap: _showTimerSheet,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _actionChip({
+    required String label,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: colorScheme.onSurfaceVariant),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(fontSize: 13, color: colorScheme.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showRateSheet() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+              24, 24, 24, MediaQuery.of(ctx).padding.bottom + 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '语速设置',
+                style: Theme.of(ctx)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+              StepSlider(
+                value: rate,
+                min: 0.5,
+                max: 2.5,
+                step: 0.1,
+                onChanged: (v) {
+                  setSheetState(() {});
+                  setState(() {
+                    rate = v;
+                    TtsHandler().rate = v;
+                  });
+                },
+                thumbLabel: (v) => v.toStringAsFixed(1),
+                tickLabels: const [1.0, 1.5, 2.0],
+                leftText: '慢',
+                rightText: '快',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showTimerSheet() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+              24, 24, 24, MediaQuery.of(ctx).padding.bottom + 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '定时关闭',
+                style: Theme.of(ctx)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+              StepSlider(
+                value: (stopSeconds / 60).roundToDouble().clamp(0, 60),
+                min: 0,
+                max: 60,
+                step: 5,
+                onChanged: (v) {
+                  setSheetState(() {});
+                  setState(() {
+                    stopSeconds = v * 60;
+                    stopTimer?.cancel();
+                    if (stopSeconds > 0) {
+                      stopTimer = Timer.periodic(
+                        const Duration(seconds: 5),
+                        (timer) {
+                          if (stopSeconds > 5) {
+                            stopSeconds -= 5;
+                            if (mounted) setState(() {});
+                          } else {
+                            TtsHandler().stop();
+                            stopSeconds = 0;
+                            timer.cancel();
+                            if (mounted) setState(() {});
+                          }
+                        },
+                      );
+                    }
+                  });
+                },
+                thumbLabel: (v) => v == 0 ? '关' : '${v.toInt()}',
+                tickLabels: const [15, 30, 45],
+                leftText: '关',
+                rightText: '60m',
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -279,56 +439,6 @@ class _TtsPlayerSheetState extends ConsumerState<TtsPlayerSheet> {
     );
   }
 
-  Widget _buildRateSlider() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 8, 32, 8),
-      child: Row(
-        children: [
-          Icon(
-            EvaIcons.clock_outline,
-            size: 18,
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-          ),
-          const SizedBox(width: 12),
-          Text(
-            L10n.of(context).ttsRate,
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Slider(
-              value: rate,
-              onChanged: (newRate) {
-                setState(() {
-                  rate = newRate;
-                  TtsHandler().rate = newRate;
-                });
-              },
-              min: 0.5,
-              max: 2.0,
-              divisions: 15,
-              label: '${rate.toStringAsFixed(1)}x',
-            ),
-          ),
-          SizedBox(
-            width: 40,
-            child: Text(
-              '${rate.toStringAsFixed(1)}x',
-              style: TextStyle(
-                fontSize: 13,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.end,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildVolumeSlider() {
     return Row(
       children: [
@@ -395,75 +505,6 @@ class _TtsPlayerSheetState extends ConsumerState<TtsPlayerSheet> {
             max: 2.0,
             divisions: 15,
             label: pitch.toStringAsFixed(1),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStopTimerWidget() {
-    return Row(
-      children: [
-        Icon(
-          EvaIcons.clock_outline,
-          size: 18,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
-        const SizedBox(width: 12),
-        Text(
-          L10n.of(context).ttsStopAfter(0).split(' ')[0],
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurfaceVariant,
-            fontSize: 13,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Slider(
-            value: stopSeconds / 60,
-            onChanged: (newValue) {
-              setState(() {
-                stopSeconds = newValue * 60;
-                stopTimer?.cancel();
-
-                if (stopSeconds > 0) {
-                  stopTimer = Timer.periodic(
-                    const Duration(seconds: 5),
-                    (timer) {
-                      if (stopSeconds > 5) {
-                        stopSeconds -= 5;
-                        if (mounted) {
-                          setState(() {});
-                        }
-                        return;
-                      } else {
-                        TtsHandler().stop();
-                        stopSeconds = 0;
-                        timer.cancel();
-                        if (mounted) {
-                          setState(() {});
-                        }
-                      }
-                    },
-                  );
-                }
-              });
-            },
-            min: 0.0,
-            max: 60.0,
-            label: L10n.of(context)
-                .commonMinutesFull((stopSeconds / 60).round()),
-          ),
-        ),
-        SizedBox(
-          width: 60,
-          child: Text(
-            L10n.of(context).ttsStopAfter((stopSeconds / 60).ceil()),
-            style: TextStyle(
-              fontSize: 12,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-            textAlign: TextAlign.end,
           ),
         ),
       ],
@@ -638,7 +679,6 @@ class _TtsPlayerSheetState extends ConsumerState<TtsPlayerSheet> {
               children: [
                 _buildVolumeSlider(),
                 _buildPitchSlider(),
-                _buildStopTimerWidget(),
                 _buildTtsServiceSelector(),
                 const Divider(),
                 _buildLogPanel(),
@@ -674,7 +714,6 @@ class _TtsPlayerSheetState extends ConsumerState<TtsPlayerSheet> {
                       _buildProgressBar(currentReading),
                       _buildMainControls(isPlaying),
                       const Divider(indent: 32, endIndent: 32),
-                      _buildRateSlider(),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 32),
                         child: _buildMoreSettings(),
