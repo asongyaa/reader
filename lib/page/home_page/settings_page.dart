@@ -9,11 +9,9 @@ import 'package:anx_reader/page/settings_page/sync.dart';
 import 'package:anx_reader/page/settings_page/translate.dart';
 import 'package:anx_reader/utils/theme_mode_to_string.dart';
 import 'package:anx_reader/widgets/common/anx_segmented_button.dart';
-import 'package:anx_reader/widgets/settings/webdav_switch.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:icons_plus/icons_plus.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key, this.controller});
@@ -25,9 +23,6 @@ class SettingsPage extends ConsumerStatefulWidget {
 }
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
-  late final ScrollController _scrollController =
-      widget.controller ?? ScrollController();
-
   void _navigateTo(BuildContext context, String title, Widget body) {
     Navigator.push(
       context,
@@ -85,18 +80,28 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
+  String _getThemeLabel() {
+    final mode = themeModeToString(Prefs().themeMode);
+    switch (mode) {
+      case 'dark': return '已开启';
+      case 'light': return '已关闭';
+      default: return '跟随系统';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final l10n = L10n.of(context);
-    final themeLabel = themeModeToString(Prefs().themeMode);
+
     return Scaffold(
       body: SafeArea(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Title bar
             Padding(
-              padding: const EdgeInsets.fromLTRB(4, 8, 16, 8),
+              padding: const EdgeInsets.fromLTRB(4, 12, 16, 12),
               child: Row(
                 children: [
                   IconButton(
@@ -104,111 +109,85 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     onPressed: () => Navigator.pop(context),
                   ),
                   const SizedBox(width: 4),
-                  Text(l10n.navBarSettings,
-                      style: Theme.of(context).textTheme.titleLarge),
+                  Text('设置', style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: cs.onSurface,
+                  )),
                 ],
               ),
             ),
-            Divider(color: cs.outlineVariant, height: 1),
-            // Content
+            // Settings list
             Expanded(
-              child: SingleChildScrollView(
-                controller: _scrollController,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 80),
-                  child: Column(
-                    children: [
-                      // Theme mode picker
-                      ListTile(
-                        leading: Icon(Icons.brightness_6, color: cs.primary),
-                        title: Text(l10n.settingsAppearanceTheme),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(themeLabel,
-                                style: Theme.of(context).textTheme.bodyMedium),
-                            const SizedBox(width: 4),
-                            Icon(Icons.chevron_right, color: cs.primary),
-                          ],
-                        ),
-                        onTap: _showThemePicker,
-                      ),
-                      Divider(color: cs.outlineVariant, height: 1),
-                      // WebDAV switch
-                      webdavSwitch(context, setState, ref),
-                      Divider(color: cs.outlineVariant, height: 1),
-                      // Settings list
-                      ListTile(
-                        leading: Icon(Icons.color_lens_outlined,
-                            color: cs.primary),
-                        title: Text(l10n.settingsAppearance),
-                        trailing:
-                            Icon(Icons.chevron_right, color: cs.primary),
-                        onTap: () => _navigateTo(context,
-                            l10n.settingsAppearance, const AppearanceSetting()),
-                      ),
-                      ListTile(
-                        leading:
-                            Icon(Icons.book_rounded, color: cs.primary),
-                        title: Text(l10n.settingsReading),
-                        trailing:
-                            Icon(Icons.chevron_right, color: cs.primary),
-                        onTap: () => _navigateTo(context, l10n.settingsReading,
-                            const ReadingSettings()),
-                      ),
-                      ListTile(
-                        leading:
-                            Icon(Icons.sync_outlined, color: cs.primary),
-                        title: Text(l10n.settingsSync),
-                        trailing:
-                            Icon(Icons.chevron_right, color: cs.primary),
-                        onTap: () => _navigateTo(
-                            context, l10n.settingsSync, const SyncSetting()),
-                      ),
-                      ListTile(
-                        leading:
-                            Icon(EvaIcons.headphones, color: cs.primary),
-                        title: Text(l10n.settingsNarrate),
-                        trailing:
-                            Icon(Icons.chevron_right, color: cs.primary),
-                        onTap: () => _navigateTo(context, l10n.settingsNarrate,
-                            const NarrateSettings()),
-                      ),
-                      ListTile(
-                        leading: Icon(Icons.translate_outlined,
-                            color: cs.primary),
-                        title: Text(l10n.settingsTranslate),
-                        trailing:
-                            Icon(Icons.chevron_right, color: cs.primary),
-                        onTap: () => _navigateTo(context,
-                            l10n.settingsTranslate, const TranslateSetting()),
-                      ),
-                      ListTile(
-                        leading:
-                            Icon(Icons.storage_outlined, color: cs.primary),
-                        title: Text(l10n.storage),
-                        trailing:
-                            Icon(Icons.chevron_right, color: cs.primary),
-                        onTap: () => _navigateTo(
-                            context, l10n.storage, const StorageSettings()),
-                      ),
-                      ListTile(
-                        leading:
-                            Icon(Icons.shield_outlined, color: cs.primary),
-                        title: Text(l10n.settingsAdvanced),
-                        trailing:
-                            Icon(Icons.chevron_right, color: cs.primary),
-                        onTap: () => _navigateTo(context, l10n.settingsAdvanced,
-                            const AdvancedSetting()),
-                      ),
-                    ],
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: 80),
+                children: [
+                  _buildItem(title: '深色模式', trailing: _getThemeLabel(), onTap: _showThemePicker),
+                  _divider(cs),
+                  _buildItem(title: '语言设置', trailing: '默认设置', onTap: () {}),
+                  _divider(cs),
+                  _buildSwitchItem(
+                    title: '选词震动',
+                    value: !Prefs().reduceVibrationFeedback,
+                    onChanged: (v) { setState(() => Prefs().reduceVibrationFeedback = !v); },
                   ),
-                ),
+                  _divider(cs),
+                  _buildItem(title: l10n.settingsAppearance, onTap: () => _navigateTo(context, l10n.settingsAppearance, const AppearanceSetting())),
+                  _divider(cs),
+                  _buildItem(title: l10n.settingsReading, onTap: () => _navigateTo(context, l10n.settingsReading, const ReadingSettings())),
+                  _divider(cs),
+                  _buildItem(title: l10n.settingsNarrate, onTap: () => _navigateTo(context, l10n.settingsNarrate, const NarrateSettings())),
+                  _divider(cs),
+                  _buildItem(title: l10n.settingsTranslate, onTap: () => _navigateTo(context, l10n.settingsTranslate, const TranslateSetting())),
+                  _divider(cs),
+                  _buildItem(title: l10n.settingsSync, onTap: () => _navigateTo(context, l10n.settingsSync, const SyncSetting())),
+                  _divider(cs),
+                  _buildItem(title: l10n.storage, onTap: () => _navigateTo(context, l10n.storage, const StorageSettings())),
+                  _divider(cs),
+                  _buildItem(title: l10n.settingsAdvanced, onTap: () => _navigateTo(context, l10n.settingsAdvanced, const AdvancedSetting())),
+                  _divider(cs),
+                ],
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  Widget _buildItem({required String title, String? trailing, required VoidCallback onTap}) {
+    final cs = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+        child: Row(
+          children: [
+            Expanded(child: Text(title, style: TextStyle(fontSize: 16, color: cs.onSurface))),
+            if (trailing != null)
+              Text(trailing, style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant)),
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right, size: 20, color: cs.onSurfaceVariant),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSwitchItem({required String title, required bool value, required ValueChanged<bool> onChanged}) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+      child: Row(
+        children: [
+          Expanded(child: Text(title, style: TextStyle(fontSize: 16, color: cs.onSurface))),
+          Switch(value: value, onChanged: onChanged),
+        ],
+      ),
+    );
+  }
+
+  Widget _divider(ColorScheme cs) {
+    return Divider(height: 1, indent: 24, endIndent: 24, color: cs.outlineVariant.withOpacity(0.5));
   }
 }
