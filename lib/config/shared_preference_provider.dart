@@ -509,7 +509,22 @@ class Prefs extends ChangeNotifier {
   }
 
   String get ttsEngineType {
-    return prefs.getString('ttsEngineType') ?? 'system';
+    String? engine = prefs.getString('ttsEngineType');
+    if (engine != null) {
+      const validTypes = ['system', 'edge', 'azure', 'sherpaOnnx'];
+      if (validTypes.contains(engine)) return engine;
+    }
+    // Migration from legacy ttsService preference
+    String? service = prefs.getString('ttsService');
+    if (service == 'azure') {
+      prefs.setString('ttsEngineType', 'azure');
+      return 'azure';
+    }
+    if (service == 'aliyun' || service == 'openai') {
+      prefs.setString('ttsEngineType', 'system');
+      return 'system';
+    }
+    return 'system';
   }
 
   set offlineTtsSid(int sid) {

@@ -9,6 +9,7 @@ import 'package:anx_reader/providers/current_reading.dart';
 import 'package:anx_reader/service/tts/base_tts.dart';
 import 'package:anx_reader/service/tts/tts_debug_logger.dart';
 import 'package:anx_reader/service/tts/tts_handler.dart';
+import 'package:anx_reader/service/tts/tts_engine.dart';
 import 'package:anx_reader/service/tts/tts_service.dart' as tts_svc;
 import 'package:anx_reader/widgets/bookshelf/book_cover.dart';
 import 'package:anx_reader/page/settings_page/narrate.dart';
@@ -67,11 +68,12 @@ class _TtsPlayerSheetState extends ConsumerState<TtsPlayerSheet> {
   }
 
   String _getTtsServiceLabel(BuildContext context) {
-    final serviceId = Prefs().ttsService;
-    if (serviceId == 'system') {
-      return L10n.of(context).ttsTypeSystem;
-    }
-    return tts_svc.getTtsService(serviceId).getLabel(context);
+    final engineTypeStr = Prefs().ttsEngineType;
+    final engineType = TtsEngineType.values.firstWhere(
+      (e) => e.name == engineTypeStr,
+      orElse: () => TtsEngineType.system,
+    );
+    return tts_svc.getTtsEngineTypeLabel(context, engineType);
   }
 
   Widget _buildDragHandle() {

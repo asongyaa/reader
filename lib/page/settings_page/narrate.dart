@@ -6,7 +6,8 @@ import 'package:anx_reader/service/tts/online_tts.dart';
 import 'package:anx_reader/service/tts/system_tts.dart';
 import 'package:anx_reader/service/tts/tts_factory.dart';
 import 'package:anx_reader/service/tts/tts_handler.dart';
-import 'package:anx_reader/service/tts/tts_service.dart' as tts_svc;
+import 'package:anx_reader/service/tts/tts_service.dart';
+import 'package:anx_reader/service/tts/tts_service_provider.dart';
 import 'package:anx_reader/utils/get_current_language_code.dart';
 import 'package:anx_reader/utils/log/common.dart';
 import 'package:anx_reader/widgets/common/anx_button.dart';
@@ -18,7 +19,6 @@ import 'package:anx_reader/service/tts/offline_tts_model_manager.dart';
 import 'package:anx_reader/service/tts/tts_engine.dart';
 import 'package:anx_reader/service/tts/tts_engine_adapter.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -85,7 +85,7 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
         await tts.speak(content: text);
       }
     } catch (e) {
-      AnxLog.severe('TTS Test Speak Error: $e');
+      AnxLog.severe('TTS Test Speak Error: \$e');
       if (mounted) {
         final errorColor = Theme.of(context).colorScheme.error;
         SmartDialog.show(
@@ -131,10 +131,23 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
       duration: const Duration(milliseconds: 1500),
     );
 
-    final serviceId = Prefs().ttsService;
-    selectedVoiceModel =
-        tts_svc.getTtsService(serviceId).provider.getSelectedVoice();
+    _updateSelectedVoiceFromEngine();
     _testTextController.text = "Hello, this is a test.";
+  }
+
+  void _updateSelectedVoiceFromEngine() {
+    final engineTypeStr = Prefs().ttsEngineType;
+    final engineType = TtsEngineType.values.firstWhere(
+      (e) => e.name == engineTypeStr,
+      orElse: () => TtsEngineType.system,
+    );
+    if (engineType == TtsEngineType.sherpaOnnx) {
+      selectedVoiceModel = 'sid_\${Prefs().offlineTtsSid}';
+    } else if (engineType.isOnline) {
+      selectedVoiceModel = getTtsServiceProvider(engineType).getSelectedVoice();
+    } else {
+      selectedVoiceModel = Prefs().getTtsVoiceModel('system');
+    }
   }
 
   @override
@@ -201,7 +214,7 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
           key!.currentContext!,
           duration: const Duration(milliseconds: 500),
           curve: Curves.easeInOut,
-          alignment: 0.1, // Align near top
+          alignment: 0.1,
         );
       }
 
@@ -217,7 +230,7 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
     groupedVoices.clear();
 
     for (var voice in voices) {
-      String locale = voice.locale; // TtsVoice ensures non-null
+      String locale = voice.locale;
       String languageName = _getLanguageNameFromLocale(locale);
 
       if (!groupedVoices.containsKey(languageName)) {
@@ -233,51 +246,51 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
     String langCode = locale.split('-')[0].toLowerCase();
 
     const Map<String, String> languageMap = {
-      'ar': 'العربية', // Arabic
-      'bg': 'Български', // Bulgarian
-      'ca': 'Català', // Catalan
-      'cs': 'Čeština', // Czech
-      'da': 'Dansk', // Danish
-      'de': 'Deutsch', // German
-      'el': 'Ελληνικά', // Greek
-      'en': 'English', // English
-      'es': 'Español', // Spanish
-      'et': 'Eesti', // Estonian
-      'fi': 'Suomi', // Finnish
-      'fr': 'Français', // French
-      'gl': 'Galego', // Galician
-      'gu': 'ગુજરાતી', // Gujarati
-      'he': 'עברית', // Hebrew
-      'hi': 'हिन्दी', // Hindi
-      'hr': 'Hrvatski', // Croatian
-      'hu': 'Magyar', // Hungarian
-      'id': 'Bahasa Indonesia', // Indonesian
-      'it': 'Italiano', // Italian
-      'ja': '日本語', // Japanese
-      'ko': '한국어', // Korean
-      'lt': 'Lietuvių', // Lithuanian
-      'lv': 'Latviešu', // Latvian
-      'ms': 'Bahasa Melayu', // Malay
-      'mt': 'Malti', // Maltese
-      'nb': 'Norsk bokmål', // Norwegian Bokmål
-      'nl': 'Nederlands', // Dutch
-      'pl': 'Polski', // Polish
-      'pt': 'Português', // Portuguese
-      'ro': 'Română', // Romanian
-      'ru': 'Русский', // Russian
-      'sk': 'Slovenčina', // Slovak
-      'sl': 'Slovenščina', // Slovenian
-      'sv': 'Svenska', // Swedish
-      'ta': 'தமிழ்', // Tamil
-      'te': 'తెలుగు', // Telugu
-      'th': 'ไทย', // Thai
-      'tr': 'Türkçe', // Turkish
-      'uk': 'Українська', // Ukrainian
-      'ur': 'اردو', // Urdu
-      'vi': 'Tiếng Việt', // Vietnamese
-      'zh': '中文', // Chinese
-      'yue': '粵語', // Cantonese
-      'wuu': '吳語', // Wu Chinese
+      'ar': 'العربية',
+      'bg': 'Български',
+      'ca': 'Català',
+      'cs': 'Čeština',
+      'da': 'Dansk',
+      'de': 'Deutsch',
+      'el': 'Ελληνικά',
+      'en': 'English',
+      'es': 'Español',
+      'et': 'Eesti',
+      'fi': 'Suomi',
+      'fr': 'Français',
+      'gl': 'Galego',
+      'gu': 'ગુજરાતી',
+      'he': 'עברית',
+      'hi': 'हिन्दी',
+      'hr': 'Hrvatski',
+      'hu': 'Magyar',
+      'id': 'Bahasa Indonesia',
+      'it': 'Italiano',
+      'ja': '日本語',
+      'ko': '한국어',
+      'lt': 'Lietuvių',
+      'lv': 'Latviešu',
+      'ms': 'Bahasa Melayu',
+      'mt': 'Malti',
+      'nb': 'Norsk bokmål',
+      'nl': 'Nederlands',
+      'pl': 'Polski',
+      'pt': 'Português',
+      'ro': 'Română',
+      'ru': 'Русский',
+      'sk': 'Slovenčina',
+      'sl': 'Slovenščina',
+      'sv': 'Svenska',
+      'ta': 'தமிழ்',
+      'te': 'తెలుగు',
+      'th': 'ไทย',
+      'tr': 'Türkçe',
+      'uk': 'Українська',
+      'ur': 'اردو',
+      'vi': 'Tiếng Việt',
+      'zh': '中文',
+      'yue': '粵語',
+      'wuu': '吳語',
     };
 
     return languageMap[langCode] ?? locale;
@@ -294,8 +307,12 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
   }
 
   void _selectVoiceModel(String shortName) {
-    final engineType = ref.read(ttsEngineTypeProvider);
-    if (engineType == TtsEngineTypeEnum.sherpaOnnx) {
+    final engineTypeStr = ref.read(ttsEngineTypeProvider);
+    final engineType = TtsEngineType.values.firstWhere(
+      (e) => e.name == engineTypeStr,
+      orElse: () => TtsEngineType.system,
+    );
+    if (engineType == TtsEngineType.sherpaOnnx) {
       TtsHandler().tts.setVoice(shortName);
       setState(() {
         selectedVoiceModel = shortName;
@@ -303,17 +320,25 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
       return;
     }
 
-    final serviceId = ref.read(ttsServiceProvider);
-    final provider = tts_svc.getTtsService(serviceId).provider;
-    final hasVoiceField = provider.getConfig().containsKey('voice');
-    if (hasVoiceField) {
-      ref
-          .read(onlineTtsConfigProvider(serviceId).notifier)
-          .updateConfig('voice', shortName);
+    if (engineType.isOnline) {
+      final provider = getTtsServiceProvider(engineType);
+      final hasVoiceField = provider.getConfig().containsKey('voice');
+      if (hasVoiceField) {
+        ref
+            .read(onlineTtsConfigProvider(engineType.name).notifier)
+            .updateConfig('voice', shortName);
+      }
+      provider.setSelectedVoice(shortName);
+      setState(() {
+        selectedVoiceModel = shortName;
+      });
+      return;
     }
+
+    // system
+    Prefs().setTtsVoiceModel('system', shortName);
     setState(() {
       selectedVoiceModel = shortName;
-      provider.setSelectedVoice(shortName);
     });
   }
 
@@ -345,78 +370,116 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
     return _currentModelDetails!.gender;
   }
 
+  IconData _getEngineTypeIcon(TtsEngineType type) {
+    return switch (type) {
+      TtsEngineType.system => Icons.volume_up,
+      TtsEngineType.edge => Icons.language,
+      TtsEngineType.azure => Icons.cloud,
+      TtsEngineType.sherpaOnnx => Icons.wifi_off,
+    };
+  }
+
+  String _getEngineTypeSubtitle(TtsEngineType type) {
+    return switch (type) {
+      TtsEngineType.system => L10n.of(context).ttsTypeSystemSubtitle,
+      TtsEngineType.edge => L10n.of(context).ttsTypeEdgeSubtitle,
+      TtsEngineType.azure => L10n.of(context).ttsTypeAzureSubtitle,
+      TtsEngineType.sherpaOnnx => L10n.of(context).ttsTypeOfflineSubtitle,
+    };
+  }
+
+  void _showEngineTypePicker() {
+    final currentEngineTypeStr = Prefs().ttsEngineType;
+    final currentEngineType = TtsEngineType.values.firstWhere(
+      (e) => e.name == currentEngineTypeStr,
+      orElse: () => TtsEngineType.system,
+    );
+
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Row(
+                children: [
+                  Text(
+                    L10n.of(ctx).ttsType,
+                    style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(),
+            ...TtsEngineType.values.map((type) => ListTile(
+                  leading: Icon(_getEngineTypeIcon(type)),
+                  title: Text(getTtsEngineTypeLabel(ctx, type)),
+                  subtitle: Text(_getEngineTypeSubtitle(type)),
+                  trailing: type == currentEngineType
+                      ? Icon(Icons.check,
+                          color: Theme.of(ctx).colorScheme.primary)
+                      : null,
+                  onTap: () async {
+                    Navigator.of(ctx).pop();
+                    if (type == currentEngineType) return;
+
+                    await TtsHandler().switchEngineType(type.name);
+                    ref.read(ttsEngineTypeProvider.notifier).state =
+                        type.name;
+                    setState(() {
+                      _showVoiceList = false;
+                      _updateSelectedVoiceFromEngine();
+                    });
+                  },
+                )),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final ttsServiceId = ref.watch(ttsServiceProvider);
-    final currentProvider = tts_svc.getTtsService(ttsServiceId).provider;
+    final engineTypeStr = ref.watch(ttsEngineTypeProvider);
+    final engineType = TtsEngineType.values.firstWhere(
+      (e) => e.name == engineTypeStr,
+      orElse: () => TtsEngineType.system,
+    );
 
-    // Listen to config changes to hide voice list
-    ref.listen(onlineTtsConfigProvider(ttsServiceId), (prev, next) {
-      if (prev != next) {
+    // Listen to config changes to hide voice list (only effective when online)
+    ref.listen(onlineTtsConfigProvider(engineType.name), (prev, next) {
+      if (prev != next && engineType.isOnline) {
         setState(() {
           _showVoiceList = false;
-          selectedVoiceModel = currentProvider.getSelectedVoice();
+          selectedVoiceModel =
+              getTtsServiceProvider(engineType).getSelectedVoice();
         });
       }
     });
 
     return ListView(
       controller: _scrollController,
-      padding: const EdgeInsets.only(bottom: 50.0), // Add padding for bottom
+      padding: const EdgeInsets.only(bottom: 50.0),
       children: [
-        // --- TTS Engine Selection ---
+        // --- TTS Engine Type ---
         SettingsSection(
           title: Text(L10n.of(context).ttsType),
           tiles: [
-            CustomSettingsTile(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16.0, vertical: 8.0),
-                child: SegmentedButton<TtsEngineTypeEnum>(
-                  segments: [
-                    ButtonSegment(
-                      value: TtsEngineTypeEnum.system,
-                      label: Text(TtsEngineTypeEnum.system.label),
-                      icon: const Icon(Icons.volume_up),
-                    ),
-                    ButtonSegment(
-                      value: TtsEngineTypeEnum.sherpaOnnx,
-                      label: Text(TtsEngineTypeEnum.sherpaOnnx.label),
-                      icon: const Icon(Icons.wifi_off),
-                    ),
-                  ],
-                  selected: {ref.watch(ttsEngineTypeProvider)},
-                  onSelectionChanged:
-                      (Set<TtsEngineTypeEnum> selected) async {
-                    final newEngine = selected.first;
-                    await TtsHandler().switchEngineType(newEngine.name);
-                    ref
-                        .read(ttsEngineTypeProvider.notifier)
-                        .setEngine(newEngine);
-                    setState(() {
-                      _showVoiceList = false;
-                      if (newEngine == TtsEngineTypeEnum.sherpaOnnx) {
-                        selectedVoiceModel = 'sid_${Prefs().offlineTtsSid}';
-                      } else {
-                        final serviceId = Prefs().ttsService;
-                        selectedVoiceModel = tts_svc
-                            .getTtsService(serviceId)
-                            .provider
-                            .getSelectedVoice();
-                      }
-                    });
-                  },
-                ),
-              ),
+            SettingsTile.navigation(
+              leading: Icon(_getEngineTypeIcon(engineType)),
+              title: Text(getTtsEngineTypeLabel(context, engineType)),
+              value: Text(_getEngineTypeSubtitle(engineType)),
+              onPressed: (_) => _showEngineTypePicker(),
             ),
-          ],
-        ),
-        // --- Offline Model Management ---
-        if (ref.watch(ttsEngineTypeProvider) ==
-            TtsEngineTypeEnum.sherpaOnnx)
-          SettingsSection(
-            title: const Text('Offline Model'),
-            tiles: [
+            if (engineType.isOnline)
+              CustomSettingsTile(
+                  child: _buildConfigSection(engineType.name)),
+            if (engineType == TtsEngineType.sherpaOnnx)
               CustomSettingsTile(
                 child: _ModelDownloadCard(
                   onModelDeleted: () {
@@ -427,24 +490,20 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
                   },
                   onModelChanged: () async {
                     await TtsFactory().switchEngineType(
-                      TtsEngineTypeEnum.sherpaOnnx.name,
+                      TtsEngineType.sherpaOnnx.name,
                       forceRecreate: true,
                     );
                     setState(() {
                       _showVoiceList = false;
-                      selectedVoiceModel = 'sid_${Prefs().offlineTtsSid}';
+                      selectedVoiceModel = 'sid_\${Prefs().offlineTtsSid}';
                     });
                   },
                 ),
               ),
-            ],
-          ).animate().fadeIn(
-              duration: 300.ms,
-              curve: Curves.easeOut).slideY(
-              begin: -0.1,
-              duration: 300.ms,
-              curve: Curves.easeOut),
+          ],
+        ),
 
+        // --- Audio Settings ---
         SettingsSection(
           title: Text(L10n.of(context).settingsNarrateTtsService),
           tiles: [
@@ -458,16 +517,8 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
                 }),
           ],
         ),
-        SettingsSection(
-          title: Text(L10n.of(context).ttsType),
-          tiles: [
-            CustomSettingsTile(child: _buildServiceSelection(ttsServiceId)),
-            if (ttsServiceId != 'system')
-              CustomSettingsTile(child: _buildConfigSection(ttsServiceId)),
-          ],
-        ),
 
-        // Voice List Section - Inlined
+        // --- Voice Models ---
         SettingsSection(
           title: Text(L10n.of(context).settingsNarrateTtsVoiceModels),
           tiles: [
@@ -490,20 +541,16 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
                                 await ref.refresh(ttsVoicesProvider.future);
                             if (selectedVoiceModel == null &&
                                 voices.isNotEmpty) {
-
                               final currentLangCode =
                                   currentLocale.languageCode;
 
-                              // Try to find a voice matching current language
                               TtsVoice? match = voices.firstWhere(
                                 (v) => v.locale
                                     .toLowerCase()
                                     .startsWith(currentLangCode.toLowerCase()),
                                 orElse: () => voices.firstWhere(
-                                  // Fallback to English
                                   (v) =>
                                       v.locale.toLowerCase().startsWith('en'),
-                                  // Fallback to first available
                                   orElse: () => voices.first,
                                 ),
                               );
@@ -523,57 +570,18 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
     );
   }
 
-  Widget _buildServiceSelection(String currentServiceId) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      child: DropdownButtonFormField<String>(
-        initialValue: currentServiceId,
-        decoration: InputDecoration(
-          labelText: L10n.of(context).settingsNarrateTtsService,
-          border: OutlineInputBorder(),
-        ),
-        items: [
-          DropdownMenuItem(
-              value: 'system',
-              child: Text(L10n.of(context).settingsNarrateSystemTts)),
-          DropdownMenuItem(
-              value: 'aliyun',
-              child: Text(L10n.of(context).settingsNarrateAliyunTts)),
-          DropdownMenuItem(
-              value: 'azure',
-              child: Text(L10n.of(context).settingsNarrateAzureTts)),
-          DropdownMenuItem(
-              value: 'openai',
-              child: Text(L10n.of(context).settingsNarrateOpenAiTts)),
-        ],
-        onChanged: (value) async {
-          if (value != null && value != currentServiceId) {
-            await TtsHandler().switchTtsType(value);
-            ref.read(ttsServiceProvider.notifier).setService(value);
-
-            // Hide voice list when switching services, require manual fetch
-            _showVoiceList = false;
-
-            // Sync selected voice model for the new service
-            selectedVoiceModel =
-                tts_svc.getTtsService(value).provider.getSelectedVoice();
-
-            setState(() {});
-          }
-        },
-      ),
+  Widget _buildConfigSection(String engineTypeName) {
+    final engineType = TtsEngineType.values.firstWhere(
+      (e) => e.name == engineTypeName,
+      orElse: () => TtsEngineType.system,
     );
-  }
+    if (!engineType.isOnline) return const SizedBox.shrink();
 
-  Widget _buildConfigSection(String serviceId) {
-    final service = tts_svc.getTtsService(serviceId);
-    if (service == tts_svc.TtsService.system) return const SizedBox.shrink();
-
-    final provider = service.provider;
+    final provider = getTtsServiceProvider(engineType);
     final configItems = provider.getConfigItems(context);
     if (configItems.isEmpty) return const SizedBox.shrink();
 
-    final config = ref.watch(onlineTtsConfigProvider(serviceId));
+    final config = ref.watch(onlineTtsConfigProvider(engineTypeName));
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
@@ -581,10 +589,9 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
         configItems: configItems,
         initialConfig: config,
         onConfigChanged: (newConfig) {
-          // Update config for each changed field
           for (var entry in newConfig.entries) {
             ref
-                .read(onlineTtsConfigProvider(serviceId).notifier)
+                .read(onlineTtsConfigProvider(engineTypeName).notifier)
                 .updateConfig(entry.key, entry.value);
           }
         },
@@ -634,12 +641,11 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
         ];
       },
       loading: () => [const Center(child: CircularProgressIndicator())],
-      error: (err, stack) => [Center(child: Text('Error: $err'))],
+      error: (err, stack) => [Center(child: Text('Error: \$err'))],
     );
   }
 
   Widget _buildCurrentModelSection() {
-    // Reuse existing UI logic
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: FilledContainer(
@@ -748,7 +754,6 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
       String languageName = language.key;
       List<TtsVoice> voicesInLanguage = language.value;
 
-      // Assign key for auto-scroll
       final GlobalKey key =
           _languageKeys.putIfAbsent(languageName, () => GlobalKey());
 
@@ -793,8 +798,8 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
 
                 final description = voice.description;
                 final subtitle = description.isNotEmpty
-                    ? '$localizationedGender · ${voice.locale} · $description'
-                    : '$localizationedGender · ${voice.locale}';
+                    ? '\$localizationedGender · \${voice.locale} · \$description'
+                    : '\$localizationedGender · \${voice.locale}';
 
                 return AnimatedBuilder(
                   animation: _highlightAnimation,
@@ -868,7 +873,6 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
   }
 }
 
-/// Card widget for managing offline TTS model download/delete/status.
 class _ModelDownloadCard extends StatefulWidget {
   final VoidCallback? onModelDeleted;
   final VoidCallback? onModelChanged;
@@ -948,7 +952,7 @@ class _ModelDownloadCardState extends State<_ModelDownloadCard> {
                 const Text('Download Failed'),
               ],
             ),
-            content: Text('$e'),
+            content: Text('\$e'),
             actions: [
               TextButton(
                 onPressed: () => SmartDialog.dismiss(),
@@ -1019,7 +1023,7 @@ class _ModelDownloadCardState extends State<_ModelDownloadCard> {
               const SizedBox(width: 8),
               const Text('导入失败'),
             ]),
-            content: Text('$e'),
+            content: Text('\$e'),
             actions: [
               TextButton(
                 onPressed: () => SmartDialog.dismiss(),
@@ -1058,7 +1062,6 @@ class _ModelDownloadCardState extends State<_ModelDownloadCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Status header
           Row(
             children: [
               AnimatedSwitcher(
@@ -1067,7 +1070,7 @@ class _ModelDownloadCardState extends State<_ModelDownloadCard> {
                   _isDownloaded!
                       ? Icons.check_circle
                       : Icons.cloud_download,
-                  key: ValueKey('model_icon_$_isDownloaded'),
+                  key: ValueKey('model_icon_\$_isDownloaded'),
                   color: _isDownloaded!
                       ? Colors.green
                       : colorScheme.primary,
@@ -1095,7 +1098,6 @@ class _ModelDownloadCardState extends State<_ModelDownloadCard> {
             ],
           ),
           const SizedBox(height: 12),
-          // Description or progress bar
           if (_isDownloading || _isImporting) ...[
             const SizedBox(height: 12),
             if (_isImporting) ...[
@@ -1106,8 +1108,8 @@ class _ModelDownloadCardState extends State<_ModelDownloadCard> {
             const SizedBox(height: 8),
             Text(
               _isDownloading
-                  ? '${(_downloadProgress * 100).toStringAsFixed(0)}%'
-                  : '${(_importProgress * 100).toStringAsFixed(0)}%',
+                  ? '\${(_downloadProgress * 100).toStringAsFixed(0)}%'
+                  : '\${(_importProgress * 100).toStringAsFixed(0)}%',
               style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.primary, fontWeight: FontWeight.bold),
             ),
           ] else ...[
@@ -1120,7 +1122,6 @@ class _ModelDownloadCardState extends State<_ModelDownloadCard> {
             ),
           ],
           const SizedBox(height: 16),
-          // Action buttons
           if (!_isDownloading && !_isImporting)
             Align(
               alignment: Alignment.centerRight,

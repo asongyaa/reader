@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:anx_reader/config/shared_preference_provider.dart';
 import 'package:anx_reader/page/reading_page.dart';
 import 'package:anx_reader/service/tts/base_tts.dart';
-import 'package:anx_reader/service/tts/tts_service.dart';
+import 'package:anx_reader/service/tts/tts_engine.dart';
 import 'package:anx_reader/service/tts/tts_service_provider.dart';
 import 'package:anx_reader/service/tts/models/tts_segment.dart';
 import 'package:anx_reader/service/tts/models/tts_sentence.dart';
@@ -58,9 +58,16 @@ class OnlineTts extends BaseTts {
   TtsServiceProvider? _currentBackend;
 
   TtsServiceProvider get backend {
-    TtsService service = getTtsService(Prefs().ttsService);
-    if (_currentBackend?.service != service) {
-      _currentBackend = service.provider;
+    final engineType = TtsEngineType.values.firstWhere(
+      (e) => e.name == Prefs().ttsEngineType,
+      orElse: () => TtsEngineType.system,
+    );
+    if (!engineType.isOnline) {
+      throw StateError('OnlineTts should not be used with ${engineType.name}');
+    }
+    final newBackend = getTtsServiceProvider(engineType);
+    if (_currentBackend?.engineType != engineType) {
+      _currentBackend = newBackend;
     }
     return _currentBackend!;
   }

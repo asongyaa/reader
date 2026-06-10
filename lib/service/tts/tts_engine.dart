@@ -67,7 +67,30 @@ class TtsProgress {
   });
 }
 
-/// Enum for TTS engine types.
+/// Unified enum for TTS engine types.
+enum TtsEngineType {
+  system,
+  edge,
+  azure,
+  sherpaOnnx;
+
+  String get label {
+    return switch (this) {
+      TtsEngineType.system => 'System TTS',
+      TtsEngineType.edge => 'Edge TTS',
+      TtsEngineType.azure => 'Azure TTS',
+      TtsEngineType.sherpaOnnx => 'Offline TTS',
+    };
+  }
+
+  bool get isOnline => this == TtsEngineType.edge || this == TtsEngineType.azure;
+
+  bool get requiresConfig => this == TtsEngineType.azure;
+
+  bool get requiresModelDownload => this == TtsEngineType.sherpaOnnx;
+}
+
+@Deprecated('Use TtsEngineType instead')
 enum TtsEngineTypeEnum {
   system,
   sherpaOnnx;

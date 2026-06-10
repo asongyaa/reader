@@ -1,5 +1,6 @@
 import 'package:anx_reader/config/shared_preference_provider.dart';
 import 'package:anx_reader/service/tts/base_tts.dart';
+import 'package:anx_reader/service/tts/online_tts.dart';
 import 'package:anx_reader/service/tts/sherpa_onnx_tts_engine.dart';
 import 'package:anx_reader/service/tts/system_tts_engine.dart';
 import 'package:anx_reader/service/tts/tts_debug_logger.dart';
@@ -32,28 +33,17 @@ class TtsFactory {
 
   BaseTts createTts() {
     final engineType = Prefs().ttsEngineType;
-    final type = TtsEngineTypeEnum.values.firstWhere(
+    final type = TtsEngineType.values.firstWhere(
       (e) => e.name == engineType,
-      orElse: () => TtsEngineTypeEnum.system,
+      orElse: () => TtsEngineType.system,
     );
     TtsDebugLogger().log('TtsFactory: creating engine type=${type.name}');
     return switch (type) {
-      TtsEngineTypeEnum.sherpaOnnx => TtsEngineAdapter(SherpaOnnxTtsEngine()),
-      TtsEngineTypeEnum.system => TtsEngineAdapter(SystemTtsEngine()),
+      TtsEngineType.system => TtsEngineAdapter(SystemTtsEngine()),
+      TtsEngineType.edge => OnlineTts(),
+      TtsEngineType.azure => OnlineTts(),
+      TtsEngineType.sherpaOnnx => TtsEngineAdapter(SherpaOnnxTtsEngine()),
     };
-  }
-
-  Future<void> switchTtsType(String serviceId) async {
-    if (Prefs().ttsService == serviceId) return;
-
-    if (_currentTts != null) {
-      await _currentTts!.stop();
-      await _currentTts!.dispose();
-      _currentTts = null;
-    }
-
-    Prefs().ttsService = serviceId;
-    _currentTts = createTts();
   }
 
   Future<void> switchEngineType(String engineType, {bool forceRecreate = false}) async {

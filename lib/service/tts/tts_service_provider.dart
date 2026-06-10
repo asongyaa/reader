@@ -2,29 +2,31 @@ import 'dart:typed_data';
 
 import 'package:anx_reader/config/shared_preference_provider.dart';
 import 'package:anx_reader/service/config/service_provider.dart';
+import 'package:anx_reader/service/tts/azure_tts_backend.dart';
+import 'package:anx_reader/service/tts/edge_tts_backend.dart';
 import 'package:anx_reader/service/tts/models/tts_voice.dart';
+import 'package:anx_reader/service/tts/tts_engine.dart';
 import 'package:flutter/widgets.dart';
 
-// Re-export ConfigItem for convenience
 export 'package:anx_reader/service/config/config_item.dart';
-
-// Forward declaration to avoid circular dependency
-// The actual TtsService enum is defined in tts_service.dart
-// ignore: unused_element
-abstract class _TtsService {}
 
 /// Base class for all TTS service providers.
 ///
 /// Subclasses must implement:
-/// - [service]: The TTS service enum value.
+/// - [engineType]: The TTS engine type enum value.
 /// - [getLabel]: The display label.
 /// - For online TTS services:
 ///   - [speak]: Generate speech audio from text.
 ///   - [getVoices]: Get available voices.
 ///   - [getConfigItems]: Configuration items.
 ///   - [getConfig] / [saveConfig]: Configuration management.
-abstract class TtsServiceProvider extends ServiceProvider<dynamic> {
-  String get serviceId => service.toString().split('.').last;
+abstract class TtsServiceProvider extends ServiceProvider<TtsEngineType> {
+  @override
+  TtsEngineType get service => engineType;
+
+  String get serviceId => engineType.name;
+
+  TtsEngineType get engineType;
 
   /// The display label for this service.
   @override
@@ -35,7 +37,7 @@ abstract class TtsServiceProvider extends ServiceProvider<dynamic> {
   /// System TTS doesn't use this method.
   Future<Uint8List> speak(
       String text, String? voice, double rate, double pitch) async {
-    throw UnimplementedError('speak() not implemented for $service');
+    throw UnimplementedError('speak() not implemented for $engineType');
   }
 
   /// Get available voices for this TTS service.
@@ -48,7 +50,7 @@ abstract class TtsServiceProvider extends ServiceProvider<dynamic> {
   /// Only needed for online TTS services.
   TtsVoice convertVoiceModel(dynamic voiceData) {
     throw UnimplementedError(
-        'convertVoiceModel() not implemented for $service');
+        'convertVoiceModel() not implemented for $engineType');
   }
 
   /// Get the currently selected voice for this service.
@@ -68,8 +70,19 @@ abstract class TtsServiceProvider extends ServiceProvider<dynamic> {
     }
     final selected = getSelectedVoice();
     if (selected.isEmpty) {
-      throw Exception('No voice selected for $service');
+      throw Exception('No voice selected for $engineType');
     }
     return selected;
   }
+}
+
+TtsServiceProvider getTtsServiceProvider(TtsEngineType engineType) {
+  return switch (engineType) {
+    TtsEngineType.edge => EdgeTtsProvider(),
+    TtsEngineType.azure => AzureTtsProvider(),
+    TtsEngineType.system => throw ArgumentError(
+        'System TTS does not use TtsServiceProvider'),
+    TtsEngineType.sherpaOnnx => throw ArgumentError(
+        'Offline TTS does not use TtsServiceProvider'),
+  };
 }

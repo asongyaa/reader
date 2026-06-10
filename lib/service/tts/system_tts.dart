@@ -5,7 +5,6 @@ import 'package:anx_reader/config/shared_preference_provider.dart';
 import 'package:anx_reader/page/reading_page.dart';
 import 'package:anx_reader/service/tts/base_tts.dart';
 import 'package:anx_reader/service/tts/models/tts_voice.dart';
-import 'package:anx_reader/service/tts/tts_service.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -197,8 +196,10 @@ class SystemTts extends BaseTts {
     await flutterTts.setPitch(pitch);
 
     // Apply the saved voice model
-    final selectedVoice = SystemTtsProvider().resolveVoice(null);
-    await _applyVoice(selectedVoice);
+    final selectedVoice = Prefs().getTtsVoiceModel('system');
+    if (selectedVoice.isNotEmpty) {
+      await _applyVoice(selectedVoice);
+    }
 
     await flutterTts.speak(_currentVoiceText!);
 
