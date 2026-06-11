@@ -127,8 +127,11 @@ class EdgeTtsProvider extends TtsServiceProvider {
     required String secMsGec,
     required String muid,
   }) async {
-    final path =
-        '/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=$_trustedClientToken&ConnectionId=$connectionId';
+    final path = '/consumer/speech/synthesize/readaloud/edge/v1'
+        '?TrustedClientToken=$_trustedClientToken'
+        '&ConnectionId=$connectionId'
+        '&Sec-MS-GEC=$secMsGec'
+        '&Sec-MS-GEC-Version=1-143.0.3650.75';
     final uri = Uri.parse('https://$_host:443$path');
 
     final client = HttpClient();

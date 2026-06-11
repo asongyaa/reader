@@ -30,7 +30,7 @@ class NarrateSettings extends ConsumerStatefulWidget {
 }
 
 class _NarrateSettingsState extends ConsumerState<NarrateSettings>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   String? selectedVoiceModel;
   Map<String, List<TtsVoice>> groupedVoices = {};
   Set<String> expandedGroups = {};
