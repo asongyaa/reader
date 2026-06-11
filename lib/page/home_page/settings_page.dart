@@ -8,7 +8,7 @@ import 'package:anx_reader/page/settings_page/storege.dart';
 import 'package:anx_reader/page/settings_page/sync.dart';
 import 'package:anx_reader/page/settings_page/translate.dart';
 import 'package:anx_reader/utils/theme_mode_to_string.dart';
-import 'package:anx_reader/widgets/common/anx_segmented_button.dart';
+import 'package:anx_reader/page/settings_page/appearance.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -37,44 +37,44 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   void _showThemePicker() {
     final current = themeModeToString(Prefs().themeMode);
+    final items = [
+      {'value': 'auto', 'label': L10n.of(context).settingsSystemMode},
+      {'value': 'dark', 'label': L10n.of(context).settingsDarkMode},
+      {'value': 'light', 'label': L10n.of(context).settingsLightMode},
+    ];
     showModalBottomSheet(
       context: context,
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(L10n.of(context).settingsAppearanceTheme,
-                  style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 16),
-              AnxSegmentedButton<String>(
-                segments: <SegmentButtonItem<String>>[
-                  SegmentButtonItem(
-                    value: 'auto',
-                    label: L10n.of(context).settingsSystemMode,
-                    icon: const Icon(Icons.brightness_auto),
-                  ),
-                  SegmentButtonItem(
-                    value: 'dark',
-                    label: L10n.of(context).settingsDarkMode,
-                    icon: const Icon(Icons.brightness_2),
-                  ),
-                  SegmentButtonItem(
-                    value: 'light',
-                    label: L10n.of(context).settingsLightMode,
-                    icon: const Icon(Icons.brightness_5),
-                  ),
-                ],
-                selected: {current},
-                onSelectionChanged: (Set<String> newSelection) {
-                  Prefs().saveThemeModeToPrefs(newSelection.first);
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(
+            24, 24, 24, MediaQuery.of(ctx).padding.bottom + 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              L10n.of(context).settingsAppearanceTheme,
+              style: Theme.of(ctx)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+            ...items.map((item) {
+              final isSelected = item['value'] == current;
+              return ListTile(
+                title: Text(item['label']!),
+                trailing: isSelected
+                    ? Icon(Icons.check,
+                        color: Theme.of(ctx).colorScheme.primary)
+                    : null,
+                onTap: () {
+                  Prefs().saveThemeModeToPrefs(item['value']!);
                   setState(() {});
                   Navigator.pop(ctx);
                 },
-              ),
-            ],
-          ),
+              );
+            }),
+          ],
         ),
       ),
     );
@@ -87,6 +87,76 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       case 'light': return '已关闭';
       default: return '跟随系统';
     }
+  }
+
+  String _getLanguageLabel() {
+    if (Prefs().locale == null) return languageOptions[0].keys.first;
+    final localeStr = Prefs().locale!.languageCode +
+        (Prefs().locale!.countryCode != null
+            ? "-${Prefs().locale!.countryCode}"
+            : "");
+    return languageOptions
+        .firstWhere(
+            (e) => e.values.first == localeStr,
+            orElse: () => languageOptions[0])
+        .keys
+        .first;
+  }
+
+  void _showLanguagePicker() {
+    final currentLocaleStr = Prefs().locale == null
+        ? 'System'
+        : Prefs().locale!.languageCode +
+            (Prefs().locale!.countryCode != null
+                ? "-${Prefs().locale!.countryCode}"
+                : "");
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SizedBox(
+        height: MediaQuery.of(ctx).size.height * 0.6,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+              24, 24, 24, MediaQuery.of(ctx).padding.bottom),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                L10n.of(context).settingsAppearanceLanguage,
+                style: Theme.of(ctx)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+              Expanded(
+                child: ListView(
+                  children: languageOptions.map((e) {
+                    final name = e.keys.first;
+                    final value = e.values.first;
+                    final isSelected = (value == 'System' && Prefs().locale == null) ||
+                        value == currentLocaleStr;
+                    return ListTile(
+                      title: Text(name),
+                      trailing: isSelected
+                          ? Icon(Icons.check,
+                              color: Theme.of(ctx).colorScheme.primary)
+                          : null,
+                      onTap: () {
+                        Prefs().saveLocaleToPrefs(value);
+                        setState(() {});
+                        Navigator.pop(ctx);
+                      },
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -124,7 +194,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 children: [
                   _buildItem(title: '深色模式', trailing: _getThemeLabel(), onTap: _showThemePicker),
                   _divider(cs),
-                  _buildItem(title: '语言设置', trailing: '默认设置', onTap: () {}),
+                  _buildItem(title: '语言设置', trailing: _getLanguageLabel(), onTap: _showLanguagePicker),
                   _divider(cs),
                   _buildSwitchItem(
                     title: '选词震动',

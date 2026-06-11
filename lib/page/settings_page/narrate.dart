@@ -11,6 +11,7 @@ import 'package:anx_reader/service/tts/tts_service_provider.dart';
 import 'package:anx_reader/utils/get_current_language_code.dart';
 import 'package:anx_reader/utils/log/common.dart';
 import 'package:anx_reader/widgets/common/anx_button.dart';
+import 'package:anx_reader/widgets/common/anx_segmented_button.dart';
 import 'package:anx_reader/widgets/common/container/filled_container.dart';
 import 'package:anx_reader/widgets/settings/service_config_form.dart';
 import 'package:anx_reader/widgets/settings/settings_section.dart';
@@ -403,28 +404,23 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
 
     showModalBottomSheet(
       context: context,
-      builder: (ctx) => SafeArea(
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(
+            24, 24, 24, MediaQuery.of(ctx).padding.bottom + 24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Row(
-                children: [
-                  Text(
-                    L10n.of(ctx).ttsType,
-                    style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                ],
-              ),
+            Text(
+              L10n.of(ctx).ttsType,
+              style: Theme.of(ctx)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
-            const Divider(),
+            const SizedBox(height: 20),
             ...TtsEngineType.values.map((type) => ListTile(
-                  leading: Icon(_getEngineTypeIcon(type)),
                   title: Text(getTtsEngineTypeLabel(ctx, type)),
-                  subtitle: Text(_getEngineTypeSubtitle(type)),
                   trailing: type == currentEngineType
                       ? Icon(Icons.check,
                           color: Theme.of(ctx).colorScheme.primary)
@@ -442,7 +438,6 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
                     });
                   },
                 )),
-            const SizedBox(height: 8),
           ],
         ),
       ),
