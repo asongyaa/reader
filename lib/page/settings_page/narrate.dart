@@ -42,20 +42,12 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
   String? _currentModelLanguageGroup;
 
   final Map<String, GlobalKey> _languageKeys = {};
-  final TextEditingController _testTextController = TextEditingController();
   bool _showVoiceList = false;
+  TabController? _voiceTabController;
 
   final Map<String, bool> _modelLoadingStates = {};
-  bool _mainTestLoading = false;
-
-  Future<void> _testSpeak(String text, String? voiceShortName,
-      {bool isMainButton = false}) async {
-    if (isMainButton) {
-      if (_mainTestLoading) return;
-      setState(() {
-        _mainTestLoading = true;
-      });
-    } else if (voiceShortName != null) {
+  Future<void> _testSpeak(String text, String? voiceShortName) async {
+    if (voiceShortName != null) {
       if (_modelLoadingStates[voiceShortName] == true) return;
       setState(() {
         _modelLoadingStates[voiceShortName] = true;
@@ -112,9 +104,7 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
     } finally {
       if (mounted) {
         setState(() {
-          if (isMainButton) {
-            _mainTestLoading = false;
-          } else if (voiceShortName != null) {
+          if (voiceShortName != null) {
             _modelLoadingStates[voiceShortName] = false;
           }
         });
@@ -132,7 +122,6 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
     );
 
     _updateSelectedVoiceFromEngine();
-    _testTextController.text = "Hello, this is a test.";
   }
 
   void _updateSelectedVoiceFromEngine() {
@@ -169,9 +158,9 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
 
   @override
   void dispose() {
+    _voiceTabController?.dispose();
     _scrollController.dispose();
     _highlightAnimationController.dispose();
-    _testTextController.dispose();
     super.dispose();
   }
 
@@ -317,6 +306,7 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
       setState(() {
         selectedVoiceModel = shortName;
       });
+      _showVoiceSelectedToast(shortName);
       return;
     }
 
@@ -332,6 +322,7 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
       setState(() {
         selectedVoiceModel = shortName;
       });
+      _showVoiceSelectedToast(shortName);
       return;
     }
 
@@ -340,6 +331,21 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
     setState(() {
       selectedVoiceModel = shortName;
     });
+    _showVoiceSelectedToast(shortName);
+  }
+
+  void _showVoiceSelectedToast(String shortName) {
+    String voiceName = shortName;
+    for (final voices in groupedVoices.values) {
+      for (final voice in voices) {
+        if (voice.shortName == shortName) {
+          voiceName = voice.name;
+          break;
+        }
+      }
+      if (voiceName != shortName) break;
+    }
+    SmartDialog.showToast('语音模型: $voiceName 设置成功');
   }
 
   IconData _getGenderIcon(String gender) {
@@ -599,6 +605,116 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
     );
   }
 
+  String _getAutoTestText(Locale locale) {
+    if (locale.languageCode == 'zh') {
+      return '读万卷书，行万里路';
+    }
+    return 'Hello, this is a test.';
+  }
+
+  String _getLangCodeFromName(String languageName) {
+    const Map<String, String> reverseMap = {
+      'العربية': 'ar',
+      'Български': 'bg',
+      'Català': 'ca',
+      'Čeština': 'cs',
+      'Dansk': 'da',
+      'Deutsch': 'de',
+      'Ελληνικά': 'el',
+      'English': 'en',
+      'Español': 'es',
+      'Eesti': 'et',
+      'Suomi': 'fi',
+      'Français': 'fr',
+      'Galego': 'gl',
+      'ગુજરાતી': 'gu',
+      'עברית': 'he',
+      'हिन्दी': 'hi',
+      'Hrvatski': 'hr',
+      'Magyar': 'hu',
+      'Bahasa Indonesia': 'id',
+      'Italiano': 'it',
+      '日本語': 'ja',
+      '한국어': 'ko',
+      'Lietuvių': 'lt',
+      'Latviešu': 'lv',
+      'Bahasa Melayu': 'ms',
+      'Malti': 'mt',
+      'Norsk bokmål': 'nb',
+      'Nederlands': 'nl',
+      'Polski': 'pl',
+      'Português': 'pt',
+      'Română': 'ro',
+      'Русский': 'ru',
+      'Slovenčina': 'sk',
+      'Slovenščina': 'sl',
+      'Svenska': 'sv',
+      'தமிழ்': 'ta',
+      'తెలుగు': 'te',
+      'ไทย': 'th',
+      'Türkçe': 'tr',
+      'Українська': 'uk',
+      'اردو': 'ur',
+      'Tiếng Việt': 'vi',
+      '中文': 'zh',
+      '粵語': 'yue',
+      '吳語': 'wuu',
+    };
+    return reverseMap[languageName] ?? languageName.toLowerCase();
+  }
+
+  Widget _buildVoiceListItem(TtsVoice voice, String testText) {
+    final shortName = voice.shortName;
+    final isSelected = selectedVoiceModel == shortName;
+
+    String localizedGender = voice.gender.toLowerCase() == 'female'
+        ? L10n.of(context).settingsNarrateVoiceModelFemale
+        : voice.gender.toLowerCase() == 'male'
+            ? L10n.of(context).settingsNarrateVoiceModelMale
+            : voice.gender;
+
+    final displayText = '${voice.name}-$localizedGender ${voice.locale}';
+
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      title: Text(
+        displayText,
+        style: TextStyle(
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        ),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: _modelLoadingStates[shortName] == true
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.play_arrow, size: 20),
+            onPressed: () => _testSpeak(testText, shortName),
+            tooltip: L10n.of(context).commonTest,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          ),
+          if (isSelected)
+            Icon(Icons.check, size: 20, color: Theme.of(context).colorScheme.primary),
+        ],
+      ),
+      onTap: () => _selectVoiceModel(shortName),
+      selected: isSelected,
+    );
+  }
+
+  Widget _buildVoiceListForTab(List<TtsVoice> voices, String testText) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: voices.map((voice) => _buildVoiceListItem(voice, testText)).toList(),
+    );
+  }
+
   List<Widget> _buildVoiceListContent() {
     final voicesAsync = ref.watch(ttsVoicesProvider);
 
@@ -613,31 +729,42 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
         _groupVoicesByLanguage(voices);
         _updateCurrentModelDetails(voices);
 
+        final currentLocale = Localizations.localeOf(context);
+        final currentLangCode = currentLocale.languageCode;
+        var sortedEntries = groupedVoices.entries.toList()
+          ..sort((a, b) {
+            final aCode = _getLangCodeFromName(a.key);
+            final bCode = _getLangCodeFromName(b.key);
+            if (aCode == currentLangCode) return -1;
+            if (bCode == currentLangCode) return 1;
+            return a.key.compareTo(b.key);
+          });
+
+        final testText = _getAutoTestText(currentLocale);
+
+        if (_voiceTabController == null ||
+            _voiceTabController!.length != sortedEntries.length) {
+          _voiceTabController?.dispose();
+          _voiceTabController =
+              TabController(length: sortedEntries.length, vsync: this);
+        }
+
         return [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: TextField(
-              controller: _testTextController,
-              decoration: InputDecoration(
-                labelText: L10n.of(context).settingsNarrateTestText,
-                suffixIcon: Padding(
-                  padding: const EdgeInsets.all(5.0),
-                  child: AnxButton.icon(
-                    type: AnxButtonType.text,
-                    isLoading: _mainTestLoading,
-                    icon: Icon(Icons.play_arrow),
-                    label: Text(L10n.of(context).commonTest),
-                    onPressed: () => _testSpeak(
-                        _testTextController.text, selectedVoiceModel,
-                        isMainButton: true),
-                  ),
-                ),
-              ),
-            ),
+          TabBar(
+            controller: _voiceTabController,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            labelPadding: const EdgeInsets.symmetric(horizontal: 12),
+            tabs: sortedEntries.map((e) => Tab(text: e.key)).toList(),
           ),
-          _buildCurrentModelSection(),
-          Divider(thickness: 4, color: Theme.of(context).colorScheme.surface),
-          ..._buildVoiceModelList(),
+          AnimatedBuilder(
+            animation: _voiceTabController!,
+            builder: (context, child) {
+              final index = _voiceTabController!.index;
+              return _buildVoiceListForTab(
+                  sortedEntries[index].value, testText);
+            },
+          ),
         ];
       },
       loading: () => [const Center(child: CircularProgressIndicator())],
@@ -645,232 +772,6 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
     );
   }
 
-  Widget _buildCurrentModelSection() {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: FilledContainer(
-        child: InkWell(
-          onTap: _scrollToSelectedModel,
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      L10n.of(context).settingsNarrateVoiceModelCurrentModel,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey,
-                      ),
-                    ),
-                    Icon(
-                      _getGenderIcon(_getCurrentModelGender()),
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    CircleAvatar(
-                      backgroundColor:
-                          Theme.of(context).colorScheme.primaryContainer,
-                      radius: 24,
-                      child: Icon(
-                        _getGenderIcon(_getCurrentModelGender()),
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                        size: 24,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _getCurrentModelDisplayName(),
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _getCurrentModelLanguageName(),
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Text(
-                      L10n.of(context).settingsNarrateVoiceModelClickToView,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                    Icon(
-                      Icons.arrow_downward,
-                      size: 16,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  List<Widget> _buildVoiceModelList() {
-    List<Widget> voiceModelList = [];
-
-    String currentLangCode = getCurrentLanguageCode();
-    String currentLangName = _getLanguageNameFromLocale(currentLangCode);
-
-    var sortedEntries = groupedVoices.entries.toList()
-      ..sort((a, b) {
-        if (a.key == currentLangName) return -1;
-        if (b.key == currentLangName) return 1;
-        return a.key.compareTo(b.key);
-      });
-
-    for (var language in sortedEntries) {
-      String languageName = language.key;
-      List<TtsVoice> voicesInLanguage = language.value;
-
-      final GlobalKey key =
-          _languageKeys.putIfAbsent(languageName, () => GlobalKey());
-
-      voiceModelList.add(
-        Column(
-          children: [
-            FilledContainer(
-              radius: 5,
-              key: key,
-              child: ListTile(
-                title: Text(
-                  languageName,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
-                trailing: Icon(
-                  expandedGroups.contains(languageName)
-                      ? Icons.keyboard_arrow_up
-                      : Icons.keyboard_arrow_down,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                onTap: () => _toggleGroup(languageName),
-              ),
-            ),
-            if (expandedGroups.contains(languageName))
-              ...voicesInLanguage.map((voice) {
-                String shortName = voice.shortName;
-                String friendlyName = voice.name;
-                String gender = voice.gender;
-                String displayName = friendlyName;
-
-                bool isHighlighted = _highlightedModel == shortName;
-                bool isSelected = selectedVoiceModel == shortName;
-                String localizationedGender = gender.toLowerCase() == 'female'
-                    ? L10n.of(context).settingsNarrateVoiceModelFemale
-                    : gender.toLowerCase() == 'male'
-                        ? L10n.of(context).settingsNarrateVoiceModelMale
-                        : gender;
-
-                final description = voice.description;
-                final subtitle = description.isNotEmpty
-                    ? '\$localizationedGender · \${voice.locale} · \$description'
-                    : '\$localizationedGender · \${voice.locale}';
-
-                return AnimatedBuilder(
-                  animation: _highlightAnimation,
-                  builder: (context, child) {
-                    return Container(
-                      color: isHighlighted
-                          ? _highlightAnimation.value
-                          : Colors.transparent,
-                      child: child,
-                    );
-                  },
-                  child: ExpansionTile(
-                    leading: CircleAvatar(
-                      backgroundColor:
-                          Theme.of(context).colorScheme.primaryContainer,
-                      child: Icon(
-                        _getGenderIcon(gender),
-                        color: Theme.of(context).colorScheme.onPrimaryContainer,
-                      ),
-                    ),
-                    title: Text(
-                      displayName,
-                      style: TextStyle(
-                        fontWeight:
-                            isSelected ? FontWeight.bold : FontWeight.normal,
-                      ),
-                    ),
-                    subtitle: Text(subtitle),
-                    trailing: isSelected
-                        ? Icon(Icons.check,
-                            color: Theme.of(context).primaryColor)
-                        : null,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          AnxButton.icon(
-                            type: AnxButtonType.text,
-                            isLoading: _modelLoadingStates[shortName] ?? false,
-                            icon: Icon(Icons.play_arrow),
-                            label: Text(L10n.of(context).commonTest),
-                            onPressed: () =>
-                                _testSpeak(_testTextController.text, shortName),
-                          ),
-                          AnxButton(
-                            type: AnxButtonType.outlined,
-                            child:
-                                Text(L10n.of(context).settingsNarrateUseVoice),
-                            onPressed: () {
-                              _selectVoiceModel(shortName);
-                            },
-                          )
-                        ],
-                      )
-                    ],
-                  ),
-                );
-              }),
-            if (language != sortedEntries.last)
-              Divider(
-                height: 1,
-                thickness: 4,
-                color: Theme.of(context).colorScheme.surface,
-              ),
-          ],
-        ),
-      );
-    }
-
-    return voiceModelList;
-  }
 }
 
 class _ModelDownloadCard extends StatefulWidget {

@@ -1,14 +1,16 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:anx_reader/l10n/generated/L10n.dart';
 import 'package:anx_reader/service/tts/models/tts_voice.dart';
 import 'package:anx_reader/service/tts/tts_engine.dart';
 import 'package:anx_reader/service/tts/tts_service_provider.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 
 class EdgeTtsProvider extends TtsServiceProvider {
   static final EdgeTtsProvider _instance = EdgeTtsProvider._internal();
@@ -19,8 +21,7 @@ class EdgeTtsProvider extends TtsServiceProvider {
 
   EdgeTtsProvider._internal();
 
-  static const String _wsUrl =
-      'wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1';
+  static const String _host = 'speech.platform.bing.com';
   static const String _trustedClientToken =
       '6A5AA1D4EAFF4E9FB37E23D68491D6F4';
   static const String _voicesUrl =
@@ -64,55 +65,134 @@ class EdgeTtsProvider extends TtsServiceProvider {
     final locale = _parseLocaleFromVoice(resolvedVoice);
     final ssml = _buildSsml(text, resolvedVoice, locale, rate, pitch);
 
-    final wsUrl =
-        '$_wsUrl?TrustedClientToken=$_trustedClientToken&ConnectionId=$connectionId';
-    final channel = WebSocketChannel.connect(Uri.parse(wsUrl));
+    final secMsGec = _computeSecMsGec();
+    final muid = _generateMuid();
 
-    await channel.ready;
+    final ws = await _connectWebSocket(
+      connectionId: connectionId,
+      secMsGec: secMsGec,
+      muid: muid,
+    );
 
-    // Send config message
-    final configMessage = _buildConfigMessage();
-    channel.sink.add(configMessage);
+    try {
+      // Send config message
+      final configMessage = _buildConfigMessage();
+      ws.add(configMessage);
 
-    // Send SSML message
-    final ssmlMessage = _buildSsmlMessage(requestId, ssml);
-    channel.sink.add(ssmlMessage);
+      // Send SSML message
+      final ssmlMessage = _buildSsmlMessage(requestId, ssml);
+      ws.add(ssmlMessage);
 
-    // Collect audio chunks
-    final audioChunks = <Uint8List>[];
-    var turnEnded = false;
+      // Collect audio chunks
+      final audioChunks = <Uint8List>[];
+      var turnEnded = false;
 
-    await for (final message in channel.stream) {
-      if (turnEnded) break;
+      await for (final message in ws) {
+        if (turnEnded) break;
 
-      if (message is String) {
-        if (_isTurnEnd(message)) {
-          turnEnded = true;
-          break;
-        }
-      } else if (message is List<int>) {
-        final bytes = Uint8List.fromList(message);
-        final headerLen = _getHeaderLength(bytes);
-        if (headerLen < bytes.length) {
-          audioChunks.add(bytes.sublist(headerLen));
+        if (message is String) {
+          if (_isTurnEnd(message)) {
+            turnEnded = true;
+            break;
+          }
+        } else if (message is List<int>) {
+          final bytes = Uint8List.fromList(message);
+          final headerLen = _getHeaderLength(bytes);
+          if (headerLen < bytes.length) {
+            audioChunks.add(bytes.sublist(headerLen));
+          }
         }
       }
+
+      // Concatenate all audio chunks
+      if (audioChunks.isEmpty) {
+        return Uint8List(0);
+      }
+      final totalLength =
+          audioChunks.fold<int>(0, (sum, chunk) => sum + chunk.length);
+      final result = Uint8List(totalLength);
+      var offset = 0;
+      for (final chunk in audioChunks) {
+        result.setRange(offset, offset + chunk.length, chunk);
+        offset += chunk.length;
+      }
+      return result;
+    } finally {
+      await ws.close();
+    }
+  }
+
+  Future<WebSocket> _connectWebSocket({
+    required String connectionId,
+    required String secMsGec,
+    required String muid,
+  }) async {
+    final path =
+        '/consumer/speech/synthesize/readaloud/edge/v1?TrustedClientToken=$_trustedClientToken&ConnectionId=$connectionId';
+    final uri = Uri.parse('https://$_host:443$path');
+
+    final client = HttpClient();
+
+    final request = await client.openUrl('GET', uri);
+
+    // WebSocket upgrade headers
+    request.headers.set('Upgrade', 'websocket');
+    request.headers.set('Connection', 'Upgrade');
+    request.headers
+        .set('Sec-WebSocket-Key', base64.encode(_randomBytes(16)));
+    request.headers.set('Sec-WebSocket-Version', '13');
+
+    // Edge TTS specific headers
+    request.headers.set(
+      'Origin',
+      'chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold',
+    );
+    request.headers.set(
+      'User-Agent',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0',
+    );
+    request.headers.set('Sec-MS-GEC', secMsGec);
+    request.headers.set('Sec-MS-GEC-Version', '1-143.0.3650.75');
+    request.headers.set('Accept-Encoding', 'gzip, deflate, br, zstd');
+    request.headers.set('Cookie', 'MUID=$muid');
+
+    final response = await request.close();
+
+    if (response.statusCode != HttpStatus.switchingProtocols) {
+      client.close();
+      throw Exception(
+          'WebSocket upgrade failed: ${response.statusCode} ${response.reasonPhrase}');
     }
 
-    await channel.sink.close();
+    final socket = await response.detachSocket();
+    client.close();
 
-    // Concatenate all audio chunks
-    if (audioChunks.isEmpty) {
-      return Uint8List(0);
-    }
-    final totalLength = audioChunks.fold<int>(0, (sum, chunk) => sum + chunk.length);
-    final result = Uint8List(totalLength);
-    var offset = 0;
-    for (final chunk in audioChunks) {
-      result.setRange(offset, offset + chunk.length, chunk);
-      offset += chunk.length;
-    }
-    return result;
+    return WebSocket.fromUpgradedSocket(
+      socket,
+      serverSide: false,
+    );
+  }
+
+  String _computeSecMsGec() {
+    final now = DateTime.now().toUtc();
+    final unixSeconds = now.millisecondsSinceEpoch ~/ 1000;
+    final windowsSeconds = unixSeconds + 11644473600;
+    final roundedSeconds = (windowsSeconds ~/ 300) * 300;
+    final fileTime = roundedSeconds * 10000000;
+    final input = '${fileTime}6A5AA1D4EAFF4E9FB37E23D68491D6F4';
+    final digest = sha256.convert(utf8.encode(input));
+    return digest.toString().toUpperCase();
+  }
+
+  String _generateMuid() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  }
+
+  List<int> _randomBytes(int length) {
+    final random = Random.secure();
+    return List<int>.generate(length, (_) => random.nextInt(256));
   }
 
   String _buildConfigMessage() {
@@ -152,7 +232,7 @@ class EdgeTtsProvider extends TtsServiceProvider {
     double rate,
     double pitch,
   ) {
-    final rateStr = _toPercent(rate);
+    final rateStr = _rateToPercent(rate);
     final pitchStr = _toPercent(pitch);
     final escapedText = _escapeXml(text);
     return '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="$locale">'
@@ -162,6 +242,11 @@ class EdgeTtsProvider extends TtsServiceProvider {
         '</prosody>'
         '</voice>'
         '</speak>';
+  }
+
+  String _rateToPercent(double rate) {
+    final percent = ((rate - 1.0) * 100).round();
+    return percent >= 0 ? '+$percent%' : '$percent%';
   }
 
   String _toPercent(double value) {
@@ -179,7 +264,6 @@ class EdgeTtsProvider extends TtsServiceProvider {
   }
 
   String _parseLocaleFromVoice(String voiceName) {
-    // e.g., "en-US-JennyNeural" -> "en-US"
     final parts = voiceName.split('-');
     if (parts.length >= 2) {
       return '${parts[0]}-${parts[1]}';
@@ -203,25 +287,9 @@ class EdgeTtsProvider extends TtsServiceProvider {
   }
 
   int _getHeaderLength(Uint8List bytes) {
-    if (bytes.isEmpty) return 0;
-    if (bytes[0] != 0x00) return 0;
-
-    // Scan for consecutive two 0x00 bytes
-    for (var i = 1; i < bytes.length - 1; i++) {
-      if (bytes[i] == 0x00 && bytes[i + 1] == 0x00) {
-        return i + 2;
-      }
-    }
-
-    // Fallback: try big-endian header length at bytes[1..2]
-    if (bytes.length >= 3) {
-      final headerLen = (bytes[1] << 8) | bytes[2];
-      if (headerLen > 0 && headerLen + 3 <= bytes.length) {
-        return headerLen + 3;
-      }
-    }
-
-    return 0;
+    if (bytes.length < 2) return 0;
+    final headerLen = (bytes[0] << 8) | bytes[1];
+    return 2 + headerLen;
   }
 
   @override
@@ -230,7 +298,8 @@ class EdgeTtsProvider extends TtsServiceProvider {
       final response = await http.get(
         Uri.parse(_voicesUrl),
         headers: {
-          'User-Agent': 'AnxReader',
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0',
         },
       );
 
@@ -247,12 +316,29 @@ class EdgeTtsProvider extends TtsServiceProvider {
 
   @override
   TtsVoice convertVoiceModel(dynamic voiceData) {
+    final shortName = voiceData['ShortName'] as String? ?? '';
+    final localName = voiceData['LocalName'] as String? ??
+        voiceData['Name'] as String? ??
+        '';
+    final friendlyName = _extractFriendlyName(shortName);
     return TtsVoice(
-      shortName: voiceData['ShortName'],
-      name: voiceData['LocalName'] ?? voiceData['Name'],
-      locale: voiceData['Locale'],
-      gender: voiceData['Gender'],
+      shortName: shortName,
+      name: friendlyName.isNotEmpty ? friendlyName : localName,
+      locale: voiceData['Locale'] as String? ?? '',
+      gender: voiceData['Gender'] as String? ?? '',
       rawData: voiceData is Map<String, dynamic> ? voiceData : null,
     );
+  }
+
+  String _extractFriendlyName(String shortName) {
+    final parts = shortName.split('-');
+    if (parts.length >= 3) {
+      var name = parts[2];
+      if (name.endsWith('Neural')) {
+        name = name.substring(0, name.length - 6);
+      }
+      return name;
+    }
+    return shortName;
   }
 }

@@ -22,8 +22,8 @@ class OnlineTts extends BaseTts {
   OnlineTts._internal();
 
   // ============ Configuration ============
-  static const int _bufferCapacity = 10;
-  static const int _batchSize = 5; // Max concurrent fetches
+  static const int _bufferCapacity = 15;
+  static const int _batchSize = 8; // Max concurrent fetches
   static const int _fetchTimeoutSeconds = 10;
   static const int _maxRetries = 2;
 
@@ -214,7 +214,7 @@ class OnlineTts extends BaseTts {
         final neededCount = _bufferCapacity - _buffer.length;
 
         if (neededCount <= 0) {
-          await Future.delayed(const Duration(milliseconds: 50));
+          await Future.delayed(const Duration(milliseconds: 10));
           continue;
         }
 
@@ -363,7 +363,7 @@ class OnlineTts extends BaseTts {
 
         // Wait for this segment's audio to be ready
         while (!segment.isReady && !_shouldStop) {
-          await Future.delayed(const Duration(milliseconds: 30));
+          await Future.delayed(const Duration(milliseconds: 10));
         }
         if (_shouldStop) break;
 
