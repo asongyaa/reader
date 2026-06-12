@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:anx_reader/config/shared_preference_provider.dart';
 import 'package:anx_reader/l10n/generated/L10n.dart';
 import 'package:anx_reader/models/book.dart';
+import 'package:anx_reader/models/tb_group.dart';
 import 'package:anx_reader/providers/book_list.dart';
+import 'package:anx_reader/providers/tb_groups.dart';
 import 'package:anx_reader/service/book.dart';
 import 'package:anx_reader/page/search/search_page.dart';
 import 'package:anx_reader/utils/get_path/get_temp_dir.dart';
@@ -15,6 +17,7 @@ import 'package:anx_reader/widgets/tips/bookshelf_tips.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:path/path.dart' as p;
 
 // ── Category mode enum ───────────────────────────────────────────
@@ -105,8 +108,175 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
   Widget _bookTap(Book b, BuildContext ctx) =>
       GestureDetector(
         onTap: () => pushToReadingPage(ref, ctx, b),
+        onLongPress: () => _showBookMenu(b),
         child: BookCover(book: b, width: 100, height: 150),
       );
+
+  void _showBookMenu(Book book) {
+    final l10n = L10n.of(context);
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(
+            24, 24, 24, MediaQuery.of(ctx).padding.bottom + 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              book.title,
+              style: Theme.of(ctx)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              title: const Text('加入合集'),
+              trailing: const Icon(Icons.chevron_right, size: 20),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showCollectionPicker(book);
+              },
+            ),
+            if (book.groupId != 0)
+              ListTile(
+                title: const Text('移出合集'),
+                onTap: () {
+                  ref.read(bookListProvider.notifier).removeFromGroup(book);
+                  Navigator.pop(ctx);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCollectionPicker(Book book) async {
+    final groups = ref.read(bookListProvider).valueOrNull ?? [];
+    final allBooks = groups.expand((g) => g).toList();
+    final tbGroups = await ref.read(groupDaoProvider.future);
+
+    final existingGroupIds = <int>{};
+    for (final b in allBooks) {
+      if (b.groupId != 0) existingGroupIds.add(b.groupId);
+    }
+
+    String groupName(int gid) {
+      final g = tbGroups.where((g) => g.id == gid);
+      if (g.isNotEmpty && g.first.name != '...') return g.first.name;
+      return '合集$gid';
+    }
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(
+            24, 24, 24, MediaQuery.of(ctx).padding.bottom + 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '选择合集',
+              style: Theme.of(ctx)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+            if (existingGroupIds.isNotEmpty)
+              ...existingGroupIds.map((gid) => ListTile(
+                    title: Text(groupName(gid)),
+                    trailing: book.groupId == gid
+                        ? Icon(Icons.check,
+                            color: Theme.of(ctx).colorScheme.primary)
+                        : null,
+                    onTap: () {
+                      ref.read(bookListProvider.notifier).moveBook(book, gid);
+                      Navigator.pop(ctx);
+                      SmartDialog.showToast('已加入「${groupName(gid)}」');
+                    },
+                  )),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.add),
+              title: const Text('创建新合集'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showCreateCollectionDialog(book);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCreateCollectionDialog(Book book) {
+    final controller = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(
+            24, 24, 24, MediaQuery.of(ctx).viewInsets.bottom + MediaQuery.of(ctx).padding.bottom + 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '创建新合集',
+              style: Theme.of(ctx)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: '输入合集名称',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(L10n.of(context).commonCancel),
+                ),
+                const SizedBox(width: 8),
+                FilledButton(
+                  onPressed: () async {
+                    final name = controller.text.trim();
+                    if (name.isEmpty) return;
+                    Navigator.pop(ctx);
+                    final newGroupId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+                    await ref.read(groupDaoProvider.notifier).insertGroup(newGroupId);
+                    await ref.read(groupDaoProvider.notifier).updateGroup(
+                      TbGroup(id: newGroupId, name: name),
+                    );
+                    ref.read(bookListProvider.notifier).moveBook(book, newGroupId);
+                    SmartDialog.showToast('已加入「$name」');
+                  },
+                  child: Text(L10n.of(context).commonOk),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   /// allBooks: simple grid, no cards
   Widget _buildAllBooks(List<Book> books) {
@@ -121,6 +291,7 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
         final b = books[i];
         return GestureDetector(
           onTap: () => pushToReadingPage(ref, ctx, b),
+          onLongPress: () => _showBookMenu(b),
           child: Column(children: [
             BookCover(book: b, height: 150),
             const SizedBox(height: 4),
@@ -207,14 +378,16 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
 
   /// collection view (using groupId from DB)
   Widget _buildCollectionView(List<List<Book>> groups) {
-    // Flatten groups
     final flat = groups.expand((g) => g).toList();
+    final tbGroups = ref.watch(groupDaoProvider).valueOrNull ?? [];
     final map = <String, List<Book>>{};
     for (final b in flat) {
       if (b.groupId == 0) {
         map.putIfAbsent('未分组', () => []).add(b);
       } else {
-        map.putIfAbsent('合集${b.groupId}', () => []).add(b);
+        final g = tbGroups.where((g) => g.id == b.groupId);
+        final name = (g.isNotEmpty && g.first.name != '...') ? g.first.name : '合集${b.groupId}';
+        map.putIfAbsent(name, () => []).add(b);
       }
     }
     final entries = map.entries.toList();
