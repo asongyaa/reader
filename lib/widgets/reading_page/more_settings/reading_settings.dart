@@ -8,11 +8,8 @@ import 'package:anx_reader/l10n/generated/L10n.dart';
 import 'package:anx_reader/models/reading_info.dart';
 import 'package:anx_reader/page/reading_page.dart';
 import 'package:anx_reader/page/settings_page/subpage/fonts.dart';
-import 'package:anx_reader/widgets/common/anx_choice_chips.dart';
-import 'package:anx_reader/widgets/common/anx_segmented_button.dart';
 import 'package:anx_reader/widgets/step_slider.dart';
 import 'package:flutter/material.dart';
-import 'package:icons_plus/icons_plus.dart';
 
 class ReadingMoreSettings extends StatefulWidget {
   const ReadingMoreSettings({super.key});
@@ -25,147 +22,232 @@ class _ReadingMoreSettingsState extends State<ReadingMoreSettings> {
   final isReading =
       epubPlayerKey.currentState != null && epubPlayerKey.currentState!.mounted;
 
-  @override
-  Widget build(BuildContext context) {
-    Widget convertChinese() {
-      const iconStyle = TextStyle(fontSize: 16, fontWeight: FontWeight.bold);
-      return StatefulBuilder(
-        builder: (context, setState) {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
+  void _showFixedSheet({
+    required String title,
+    required List<Widget> children,
+  }) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SizedBox(
+        height: MediaQuery.of(ctx).size.height * 0.5,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+              24, 24, 24, MediaQuery.of(ctx).padding.bottom),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(L10n.of(context).readingPageConvertChinese,
-                  style: Theme.of(context).textTheme.titleMedium),
-              AnxChoiceChips<ConvertChineseMode>(
-                segments: [
-                  SegmentButtonItem(
-                    label: L10n.of(context).readingPageOriginal,
-                    value: ConvertChineseMode.none,
-                    icon: const Text("原", style: iconStyle),
-                  ),
-                  SegmentButtonItem(
-                    label: L10n.of(context).readingPageSimplified,
-                    value: ConvertChineseMode.t2s,
-                    icon: const Text("简", style: iconStyle),
-                  ),
-                  SegmentButtonItem(
-                    label: L10n.of(context).readingPageTraditional,
-                    value: ConvertChineseMode.s2t,
-                    icon: const Text("繁", style: iconStyle),
-                  ),
-                ],
-                selected: {Prefs().readingRules.convertChineseMode},
-                onSelectionChanged: (value) {
-                  setState(() {
-                    // Prefs().readingRules.convertChineseMode =
-                    //     ConvertChineseMode.values.byName(value.first);
-                    Prefs().readingRules = Prefs()
-                        .readingRules
-                        .copyWith(convertChineseMode: value.first);
-                    epubPlayerKey.currentState
-                        ?.changeReadingRules(Prefs().readingRules);
-                  });
-                },
+              Text(
+                title,
+                style: Theme.of(ctx)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
               ),
-              Row(
-                children: [
-                  const Icon(Icons.error_outline),
-                  Expanded(
-                    child: Text(
-                      L10n.of(context).readingPageConvertChineseTips,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 20),
+              Expanded(
+                child: ListView(children: children),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSheetItem({
+    required String title,
+    required String currentLabel,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(title,
+                  style: Theme.of(context).textTheme.titleMedium),
+            ),
+            Text(
+              currentLabel,
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+            Icon(
+              Icons.chevron_right,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = L10n.of(context);
+
+    Widget downloadFonts() {
+      return ListTile(
+        contentPadding: EdgeInsets.zero,
+        title: Text(l10n.downloadFonts),
+        leading: const Icon(Icons.font_download_outlined),
+        trailing: const Icon(Icons.arrow_forward_ios),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const FontsSettingPage(),
+            ),
           );
         },
       );
     }
 
-    // Widget bionicReading() {
-    //   return StatefulBuilder(
-    //     builder: (context, setState) => ListTile(
-    //       contentPadding: EdgeInsets.zero,
-    //       title: Text(L10n.of(context).readingPageBionicReading,
-    //           style: Theme.of(context).textTheme.titleMedium),
-    //       subtitle: GestureDetector(
-    //         child: Text(
-    //           textAlign: TextAlign.start,
-    //           L10n.of(context).readingPageBionicReadingTips,
-    //           style: const TextStyle(
-    //             fontSize: 12,
-    //             color: Color(0xFF666666),
-    //             decoration: TextDecoration.underline,
-    //           ),
-    //         ),
-    //         onTap: () {
-    //           launchUrl(
-    //             Uri.parse('https://github.com/Anxcye/anx-reader/issues/49'),
-    //             mode: LaunchMode.externalApplication,
-    //           );
-    //         },
-    //       ),
-    //       trailing: Switch(
-    //         value: Prefs().readingRules.bionicReading,
-    //         onChanged: (value) {
-    //           setState(() {
-    //             Prefs().readingRules =
-    //                 Prefs().readingRules.copyWith(bionicReading: value);
-    //             epubPlayerKey.currentState?
-    //                 .changeReadingRules(Prefs().readingRules);
-    //           });
-    //         },
-    //       ),
-    //     ),
-    //   );
-    // }
+    // --- 写作方向 ---
+    Widget writingMode() {
+      String label() {
+        final m = Prefs().writingMode;
+        if (m == WritingModeEnum.auto) return l10n.readingPageWritingDirectionAuto;
+        if (m == WritingModeEnum.verticalRl) return l10n.readingPageWritingDirectionVertical;
+        return l10n.readingPageWritingDirectionHorizontal;
+      }
 
-    Widget columnCount() {
       return StatefulBuilder(
-        builder: (context, setState) => Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(L10n.of(context).readingPageColumnCount,
-                style: Theme.of(context).textTheme.titleMedium),
-            AnxChoiceChips<int>(
-              segments: [
-                SegmentButtonItem(
-                  label: L10n.of(context).readingPageAuto,
-                  value: 0,
-                  icon: const Icon(Icons.auto_awesome),
-                ),
-                SegmentButtonItem(
-                  label: L10n.of(context).readingPageSingle,
-                  value: 1,
-                  icon: const Icon(EvaIcons.book),
-                ),
-                SegmentButtonItem(
-                  label: L10n.of(context).readingPageDouble,
-                  value: 2,
-                  icon: const Icon(EvaIcons.book_open),
-                ),
-              ],
-              selected: {Prefs().bookStyle.maxColumnCount},
-              onSelectionChanged: (value) {
-                setState(() {
-                  final newBookStyle = Prefs()
-                      .bookStyle
-                      .copyWith(maxColumnCount: value.first);
-                  Prefs().saveBookStyleToPrefs(newBookStyle);
-                  epubPlayerKey.currentState?.changeStyle(newBookStyle);
-                });
-              },
-            ),
-          ],
+        builder: (context, setState) => _buildSheetItem(
+          title: l10n.readingPageWritingDirection,
+          currentLabel: label(),
+          onTap: () {
+            final items = [
+              {'label': l10n.readingPageWritingDirectionAuto, 'value': WritingModeEnum.auto},
+              {'label': l10n.readingPageWritingDirectionVertical, 'value': WritingModeEnum.verticalRl},
+              {'label': l10n.readingPageWritingDirectionHorizontal, 'value': WritingModeEnum.horizontalTb},
+            ];
+            _showFixedSheet(
+              title: l10n.readingPageWritingDirection,
+              children: items.map((item) {
+                final isSelected = item['value'] == Prefs().writingMode;
+                return ListTile(
+                  title: Text(item['label'] as String),
+                  trailing: isSelected
+                      ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
+                      : null,
+                  onTap: () {
+                    setState(() {
+                      final newBookStyle = Prefs().bookStyle.copyWith(maxColumnCount: 1);
+                      Prefs().saveBookStyleToPrefs(newBookStyle);
+                      Prefs().writingMode = item['value'] as WritingModeEnum;
+                      epubPlayerKey.currentState?.changeStyle(newBookStyle);
+                    });
+                    Navigator.pop(context);
+                  },
+                );
+              }).toList(),
+            );
+          },
         ),
       );
     }
 
+    // --- 翻译模式 ---
+    Widget translationMode() {
+      String label() {
+        if (!isReading) return l10n.readingPageOriginal;
+        final mode = Prefs().getBookTranslationMode(
+            epubPlayerKey.currentState!.widget.book.id);
+        if (mode == TranslationModeEnum.translationOnly) return l10n.translationOnly;
+        if (mode == TranslationModeEnum.bilingual) return l10n.bilingual;
+        return l10n.readingPageOriginal;
+      }
+
+      return StatefulBuilder(
+        builder: (context, setState) => _buildSheetItem(
+          title: l10n.translationMode,
+          currentLabel: label(),
+          onTap: () {
+            if (!isReading) return;
+            final items = [
+              {'label': l10n.readingPageOriginal, 'value': TranslationModeEnum.off},
+              {'label': l10n.translationOnly, 'value': TranslationModeEnum.translationOnly},
+              {'label': l10n.bilingual, 'value': TranslationModeEnum.bilingual},
+            ];
+            final currentMode = Prefs().getBookTranslationMode(
+                epubPlayerKey.currentState!.widget.book.id);
+            _showFixedSheet(
+              title: l10n.translationMode,
+              children: items.map((item) {
+                final isSelected = item['value'] == currentMode;
+                return ListTile(
+                  title: Text(item['label'] as String),
+                  trailing: isSelected
+                      ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
+                      : null,
+                  onTap: () {
+                    setState(() {
+                      final bookId = epubPlayerKey.currentState!.widget.book.id;
+                      final newMode = item['value'] as TranslationModeEnum;
+                      Prefs().setBookTranslationMode(bookId, newMode);
+                      epubPlayerKey.currentState?.setTranslationMode(newMode);
+                    });
+                    Navigator.pop(context);
+                  },
+                );
+              }).toList(),
+            );
+          },
+        ),
+      );
+    }
+
+    // --- 列数 ---
+    Widget columnCount() {
+      String label() {
+        final c = Prefs().bookStyle.maxColumnCount;
+        if (c == 0) return l10n.readingPageAuto;
+        if (c == 1) return l10n.readingPageSingle;
+        return l10n.readingPageDouble;
+      }
+
+      return StatefulBuilder(
+        builder: (context, setState) => _buildSheetItem(
+          title: l10n.readingPageColumnCount,
+          currentLabel: label(),
+          onTap: () {
+            final items = [
+              {'label': l10n.readingPageAuto, 'value': 0},
+              {'label': l10n.readingPageSingle, 'value': 1},
+              {'label': l10n.readingPageDouble, 'value': 2},
+            ];
+            _showFixedSheet(
+              title: l10n.readingPageColumnCount,
+              children: items.map((item) {
+                final isSelected = item['value'] == Prefs().bookStyle.maxColumnCount;
+                return ListTile(
+                  title: Text(item['label'] as String),
+                  trailing: isSelected
+                      ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
+                      : null,
+                  onTap: () {
+                    setState(() {
+                      final newBookStyle = Prefs()
+                          .bookStyle
+                          .copyWith(maxColumnCount: item['value'] as int);
+                      Prefs().saveBookStyleToPrefs(newBookStyle);
+                      epubPlayerKey.currentState?.changeStyle(newBookStyle);
+                    });
+                    Navigator.pop(context);
+                  },
+                );
+              }).toList(),
+            );
+          },
+        ),
+      );
+    }
+
+    // --- 列数切换阈值 ---
     Widget columnThreshold() {
       bool enabled = Prefs().bookStyle.maxColumnCount == 0;
       return StatefulBuilder(
@@ -187,12 +269,11 @@ class _ReadingMoreSettingsState extends State<ReadingMoreSettings> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  L10n.of(context).readingPageColumnThreshold,
+                                  l10n.readingPageColumnThreshold,
                                   style: Theme.of(ctx)
                                       .textTheme
                                       .titleMedium
-                                      ?.copyWith(
-                                          fontWeight: FontWeight.bold),
+                                      ?.copyWith(fontWeight: FontWeight.bold),
                                 ),
                                 const SizedBox(height: 20),
                                 StepSlider(
@@ -206,8 +287,7 @@ class _ReadingMoreSettingsState extends State<ReadingMoreSettings> {
                                       final newBookStyle = Prefs()
                                           .bookStyle
                                           .copyWith(columnThreshold: v);
-                                      Prefs()
-                                          .saveBookStyleToPrefs(newBookStyle);
+                                      Prefs().saveBookStyleToPrefs(newBookStyle);
                                       epubPlayerKey.currentState
                                           ?.changeStyle(newBookStyle);
                                     });
@@ -226,26 +306,22 @@ class _ReadingMoreSettingsState extends State<ReadingMoreSettings> {
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 child: Row(
                   children: [
-                    Text(
-                        L10n.of(context).readingPageColumnThreshold,
-                        style: Theme.of(context).textTheme.titleMedium),
-                    const Spacer(),
+                    Expanded(
+                      child: Text(l10n.readingPageColumnThreshold,
+                          style: Theme.of(context).textTheme.titleMedium),
+                    ),
                     Text(
                       '${Prefs().bookStyle.columnThreshold.toInt()}px',
                       style: TextStyle(
                         color: enabled
-                            ? Theme.of(context)
-                                .colorScheme
-                                .onSurfaceVariant
+                            ? Theme.of(context).colorScheme.onSurfaceVariant
                             : Theme.of(context).disabledColor,
                       ),
                     ),
                     Icon(
                       Icons.chevron_right,
                       color: enabled
-                          ? Theme.of(context)
-                              .colorScheme
-                              .onSurfaceVariant
+                          ? Theme.of(context).colorScheme.onSurfaceVariant
                           : Theme.of(context).disabledColor,
                     ),
                   ],
@@ -254,53 +330,79 @@ class _ReadingMoreSettingsState extends State<ReadingMoreSettings> {
             ),
             if (enabled)
               Text(
-                L10n.of(context).readingPageColumnThresholdTip,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.grey,
-                    ),
+                l10n.readingPageColumnThresholdTip,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: Colors.grey),
               ),
           ],
         ),
       );
     }
 
-    Widget writingMode() {
+    // --- 简繁转换 ---
+    Widget convertChinese() {
+      String label() {
+        final m = Prefs().readingRules.convertChineseMode;
+        if (m == ConvertChineseMode.t2s) return l10n.readingPageSimplified;
+        if (m == ConvertChineseMode.s2t) return l10n.readingPageTraditional;
+        return l10n.readingPageOriginal;
+      }
+
       return StatefulBuilder(
         builder: (context, setState) => Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(L10n.of(context).readingPageWritingDirection,
-                style: Theme.of(context).textTheme.titleMedium),
-            AnxChoiceChips<WritingModeEnum>(
-              segments: [
-                SegmentButtonItem(
-                  label: L10n.of(context).readingPageWritingDirectionAuto,
-                  value: WritingModeEnum.auto,
-                  icon: const Icon(EvaIcons.activity_outline),
-                ),
-                SegmentButtonItem(
-                  label: L10n.of(context)
-                      .readingPageWritingDirectionVertical,
-                  value: WritingModeEnum.verticalRl,
-                  icon: const Icon(Bootstrap.arrows_vertical),
-                ),
-                SegmentButtonItem(
-                  label: L10n.of(context)
-                      .readingPageWritingDirectionHorizontal,
-                  value: WritingModeEnum.horizontalTb,
-                  icon: const Icon(Bootstrap.arrows),
-                ),
-              ],
-              selected: {Prefs().writingMode},
-              onSelectionChanged: (value) {
-                setState(() {
-                  final newBookStyle =
-                      Prefs().bookStyle.copyWith(maxColumnCount: 1);
-                  Prefs().saveBookStyleToPrefs(newBookStyle);
-                  Prefs().writingMode = value.first;
-                  epubPlayerKey.currentState?.changeStyle(newBookStyle);
-                });
+            _buildSheetItem(
+              title: l10n.readingPageConvertChinese,
+              currentLabel: label(),
+              onTap: () {
+                final items = [
+                  {'label': l10n.readingPageOriginal, 'value': ConvertChineseMode.none},
+                  {'label': l10n.readingPageSimplified, 'value': ConvertChineseMode.t2s},
+                  {'label': l10n.readingPageTraditional, 'value': ConvertChineseMode.s2t},
+                ];
+                _showFixedSheet(
+                  title: l10n.readingPageConvertChinese,
+                  children: [
+                    ...items.map((item) {
+                      final isSelected = item['value'] == Prefs().readingRules.convertChineseMode;
+                      return ListTile(
+                        title: Text(item['label'] as String),
+                        trailing: isSelected
+                            ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
+                            : null,
+                        onTap: () {
+                          setState(() {
+                            Prefs().readingRules = Prefs()
+                                .readingRules
+                                .copyWith(convertChineseMode: item['value'] as ConvertChineseMode);
+                            epubPlayerKey.currentState
+                                ?.changeReadingRules(Prefs().readingRules);
+                          });
+                          Navigator.pop(context);
+                        },
+                      );
+                    }),
+                    const Divider(),
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.error_outline, size: 16),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              l10n.readingPageConvertChineseTips,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
               },
             ),
           ],
@@ -308,96 +410,104 @@ class _ReadingMoreSettingsState extends State<ReadingMoreSettings> {
       );
     }
 
-    Widget translationMode() {
+    // --- 代码高亮主题 ---
+    Widget codeHighlightTheme() {
+      String label() {
+        final t = Prefs().codeHighlightTheme;
+        if (t == CodeHighlightThemeEnum.off) return l10n.codeHighlightOff;
+        return t.displayName;
+      }
+
       return StatefulBuilder(
-        builder: (context, setState) => Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(L10n.of(context).translationMode,
-                style: Theme.of(context).textTheme.titleMedium),
-            if (!isReading)
-              Text(L10n.of(context).readingPageTranslationModeTip,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: Colors.grey)),
-            AnxChoiceChips<TranslationModeEnum>(
-              enabled: isReading,
-              segments: [
-                SegmentButtonItem(
-                  label: L10n.of(context).readingPageOriginal,
-                  value: TranslationModeEnum.off,
-                  icon: const Icon(Icons.translate_outlined),
-                ),
-                SegmentButtonItem(
-                  label: L10n.of(context).translationOnly,
-                  value: TranslationModeEnum.translationOnly,
-                  icon: const Icon(Icons.g_translate),
-                ),
-                SegmentButtonItem(
-                  label: L10n.of(context).bilingual,
-                  value: TranslationModeEnum.bilingual,
-                  icon: const Icon(Icons.compare),
-                ),
-              ],
-              selected: {
-                epubPlayerKey.currentState != null
-                    ? Prefs().getBookTranslationMode(
-                        epubPlayerKey.currentState!.widget.book.id)
-                    : TranslationModeEnum.off
-              },
-              onSelectionChanged: (value) {
-                setState(() {
-                  final currentBookId =
-                      epubPlayerKey.currentState!.widget.book.id;
-                  final newMode = value.first;
-
-                  Prefs().setBookTranslationMode(currentBookId, newMode);
-
-                  epubPlayerKey.currentState?.setTranslationMode(newMode);
-                });
-              },
-            ),
-          ],
+        builder: (context, setState) => _buildSheetItem(
+          title: l10n.codeHighlightTheme,
+          currentLabel: label(),
+          onTap: () {
+            final allThemes = [
+              CodeHighlightThemeEnum.off,
+              CodeHighlightThemeEnum.defaultTheme,
+              CodeHighlightThemeEnum.github,
+              CodeHighlightThemeEnum.oneLight,
+              CodeHighlightThemeEnum.materialLight,
+              CodeHighlightThemeEnum.vsDark,
+              CodeHighlightThemeEnum.oneDark,
+              CodeHighlightThemeEnum.dracula,
+              CodeHighlightThemeEnum.materialDark,
+              CodeHighlightThemeEnum.nord,
+              CodeHighlightThemeEnum.nightOwl,
+              CodeHighlightThemeEnum.solarizedDark,
+              CodeHighlightThemeEnum.atomDark,
+            ];
+            _showFixedSheet(
+              title: l10n.codeHighlightTheme,
+              children: allThemes.map((theme) {
+                final isSelected = Prefs().codeHighlightTheme == theme;
+                final name = theme == CodeHighlightThemeEnum.off
+                    ? l10n.codeHighlightOff
+                    : theme.displayName;
+                return ListTile(
+                  title: Text(name),
+                  trailing: isSelected
+                      ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
+                      : null,
+                  onTap: () {
+                    setState(() {
+                      Prefs().codeHighlightTheme = theme;
+                      epubPlayerKey.currentState?.changeStyle(null);
+                    });
+                    Navigator.pop(context);
+                  },
+                );
+              }).toList(),
+            );
+          },
         ),
       );
     }
 
-    Widget buildInfoDropdown(
-      BuildContext context,
+    // --- 页眉页脚信息选择 ---
+    Widget buildInfoItem(
       String label,
       ReadingInfoEnum currentValue,
       Function(ReadingInfoEnum) onChanged,
     ) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label, style: Theme.of(context).textTheme.bodySmall),
-          DropdownButton<ReadingInfoEnum>(
-            isDense: true,
-            isExpanded: true,
-            value: currentValue,
-            onChanged: (value) {
-              if (value != null) {
-                onChanged(value);
-              }
-            },
-            underline: Container(),
-            dropdownColor: Theme.of(context).colorScheme.surfaceContainer,
-            borderRadius: BorderRadius.circular(8),
-            items: ReadingInfoEnum.values.map((info) {
-              return DropdownMenuItem<ReadingInfoEnum>(
-                value: info,
-                child: Text(
-                  info.getL10n(context),
-                  overflow: TextOverflow.ellipsis,
-                ),
+      return InkWell(
+        onTap: () {
+          _showFixedSheet(
+            title: label,
+            children: ReadingInfoEnum.values.map((info) {
+              final isSelected = info == currentValue;
+              return ListTile(
+                title: Text(info.getL10n(context)),
+                trailing: isSelected
+                    ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
+                    : null,
+                onTap: () {
+                  onChanged(info);
+                  Navigator.pop(context);
+                },
               );
             }).toList(),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            children: [
+              Text(label, style: Theme.of(context).textTheme.bodyMedium),
+              const Spacer(),
+              Text(
+                currentValue.getL10n(context),
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+              Icon(Icons.chevron_right,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ],
           ),
-        ],
+        ),
       );
     }
 
@@ -409,7 +519,7 @@ class _ReadingMoreSettingsState extends State<ReadingMoreSettings> {
             epubPlayerKey.currentState?.changeReadingInfo();
           }
 
-          Widget buildSettingItem({
+          Widget buildSliderItem({
             required String label,
             required double value,
             required double min,
@@ -447,8 +557,7 @@ class _ReadingMoreSettingsState extends State<ReadingMoreSettings> {
                               setSheetState(() {});
                               setState(() {
                                 onChanged(v);
-                                epubPlayerKey.currentState
-                                    ?.changeReadingInfo();
+                                epubPlayerKey.currentState?.changeReadingInfo();
                               });
                             },
                             thumbLabel: (v) => v.toStringAsFixed(0),
@@ -469,15 +578,11 @@ class _ReadingMoreSettingsState extends State<ReadingMoreSettings> {
                     Text(
                       value.toStringAsFixed(0),
                       style: TextStyle(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurfaceVariant),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                     Icon(
                       Icons.chevron_right,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurfaceVariant,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ],
                 ),
@@ -493,89 +598,57 @@ class _ReadingMoreSettingsState extends State<ReadingMoreSettings> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
+                Text(title, style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: buildInfoDropdown(
-                        context,
-                        L10n.of(context).readingPageLeft,
-                        section.left,
-                        (value) {
-                          setState(() {
-                            onChanged(section.copyWith(left: value));
-                          });
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: buildInfoDropdown(
-                        context,
-                        L10n.of(context).readingPageCenter,
-                        section.center,
-                        (value) {
-                          setState(() {
-                            onChanged(section.copyWith(center: value));
-                          });
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: buildInfoDropdown(
-                        context,
-                        L10n.of(context).readingPageRight,
-                        section.right,
-                        (value) {
-                          setState(() {
-                            onChanged(section.copyWith(right: value));
-                          });
-                        },
-                      ),
-                    ),
-                  ],
+                buildInfoItem(
+                  l10n.readingPageLeft,
+                  section.left,
+                  (value) {
+                    setState(() => onChanged(section.copyWith(left: value)));
+                  },
                 ),
-                buildSettingItem(
-                  label: L10n.of(context).readingSettingsMargin,
+                buildInfoItem(
+                  l10n.readingPageCenter,
+                  section.center,
+                  (value) {
+                    setState(() => onChanged(section.copyWith(center: value)));
+                  },
+                ),
+                buildInfoItem(
+                  l10n.readingPageRight,
+                  section.right,
+                  (value) {
+                    setState(() => onChanged(section.copyWith(right: value)));
+                  },
+                ),
+                buildSliderItem(
+                  label: l10n.readingSettingsMargin,
                   value: section.verticalMargin,
-                  min: 0,
-                  max: 80,
-                  step: 2,
+                  min: 0, max: 80, step: 2,
                   tickLabels: const [20, 40, 60],
                   onChanged: (value) =>
                       onChanged(section.copyWith(verticalMargin: value)),
                 ),
-                buildSettingItem(
-                  label: L10n.of(context).readingPageLeftMargin,
+                buildSliderItem(
+                  label: l10n.readingPageLeftMargin,
                   value: section.leftMargin,
-                  min: 0,
-                  max: 80,
-                  step: 2,
+                  min: 0, max: 80, step: 2,
                   tickLabels: const [20, 40, 60],
                   onChanged: (value) =>
                       onChanged(section.copyWith(leftMargin: value)),
                 ),
-                buildSettingItem(
-                  label: L10n.of(context).readingPageRightMargin,
+                buildSliderItem(
+                  label: l10n.readingPageRightMargin,
                   value: section.rightMargin,
-                  min: 0,
-                  max: 80,
-                  step: 2,
+                  min: 0, max: 80, step: 2,
                   tickLabels: const [20, 40, 60],
                   onChanged: (value) =>
                       onChanged(section.copyWith(rightMargin: value)),
                 ),
-                buildSettingItem(
-                  label: L10n.of(context).readingPageFontSize,
+                buildSliderItem(
+                  label: l10n.readingPageFontSize,
                   value: section.fontSize,
-                  min: 8,
-                  max: 24,
-                  step: 1,
+                  min: 8, max: 24, step: 1,
                   tickLabels: const [12, 16, 20],
                   onChanged: (value) =>
                       onChanged(section.copyWith(fontSize: value)),
@@ -591,7 +664,7 @@ class _ReadingMoreSettingsState extends State<ReadingMoreSettings> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               buildSectionSettings(
-                title: L10n.of(context).readingPageHeaderSettings,
+                title: l10n.readingPageHeaderSettings,
                 section: readingInfo.header,
                 onChanged: (section) {
                   updateReadingInfo(readingInfo.copyWith(header: section));
@@ -599,7 +672,7 @@ class _ReadingMoreSettingsState extends State<ReadingMoreSettings> {
               ),
               const Divider(),
               buildSectionSettings(
-                title: L10n.of(context).readingPageFooterSettings,
+                title: l10n.readingPageFooterSettings,
                 section: readingInfo.footer,
                 onChanged: (section) {
                   updateReadingInfo(readingInfo.copyWith(footer: section));
@@ -611,155 +684,8 @@ class _ReadingMoreSettingsState extends State<ReadingMoreSettings> {
       );
     }
 
-    Widget downloadFonts() {
-      return ListTile(
-        contentPadding: EdgeInsets.zero,
-        title: Text(L10n.of(context).downloadFonts),
-        leading: const Icon(Icons.font_download_outlined),
-        trailing: const Icon(Icons.arrow_forward_ios),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const FontsSettingPage(),
-            ),
-          );
-        },
-      );
-    }
-
-    Widget codeHighlightTheme() {
-      return StatefulBuilder(
-        builder: (context, setState) {
-          final lightThemes = [
-            CodeHighlightThemeEnum.defaultTheme,
-            CodeHighlightThemeEnum.github,
-            CodeHighlightThemeEnum.oneLight,
-            CodeHighlightThemeEnum.materialLight,
-          ];
-
-          final darkThemes = [
-            CodeHighlightThemeEnum.vsDark,
-            CodeHighlightThemeEnum.oneDark,
-            CodeHighlightThemeEnum.dracula,
-            CodeHighlightThemeEnum.materialDark,
-            CodeHighlightThemeEnum.nord,
-            CodeHighlightThemeEnum.nightOwl,
-            CodeHighlightThemeEnum.solarizedDark,
-            CodeHighlightThemeEnum.atomDark,
-          ];
-
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(L10n.of(context).codeHighlightTheme,
-                  style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
-              // Quick toggle: Off / Light / Dark
-              AnxChoiceChips<String>(
-                segments: [
-                  SegmentButtonItem(
-                    label: L10n.of(context).codeHighlightOff,
-                    value: 'off',
-                    icon: const Icon(Icons.code_off),
-                  ),
-                  SegmentButtonItem(
-                    label: L10n.of(context).codeHighlightLight,
-                    value: 'light',
-                    icon: const Icon(Icons.light_mode),
-                  ),
-                  SegmentButtonItem(
-                    label: L10n.of(context).codeHighlightDark,
-                    value: 'dark',
-                    icon: const Icon(Icons.dark_mode),
-                  ),
-                ],
-                selected: {
-                  Prefs().codeHighlightTheme == CodeHighlightThemeEnum.off
-                      ? 'off'
-                      : Prefs().codeHighlightTheme.isLight
-                          ? 'light'
-                          : 'dark'
-                },
-                onSelectionChanged: (value) {
-                  setState(() {
-                    if (value.first == 'off') {
-                      Prefs().codeHighlightTheme =
-                          CodeHighlightThemeEnum.off;
-                    } else if (value.first == 'light') {
-                      Prefs().codeHighlightTheme =
-                          CodeHighlightThemeEnum.defaultTheme;
-                    } else {
-                      Prefs().codeHighlightTheme =
-                          CodeHighlightThemeEnum.vsDark;
-                    }
-                    epubPlayerKey.currentState?.changeStyle(null);
-                  });
-                },
-              ),
-              // Detailed theme selection (only show if not off)
-              if (Prefs().codeHighlightTheme != CodeHighlightThemeEnum.off) ...[
-                const SizedBox(height: 16),
-                // Light themes section
-                if (Prefs().codeHighlightTheme.isLight) ...[
-                  Text(L10n.of(context).codeHighlightLightThemes,
-                      style: Theme.of(context).textTheme.bodySmall),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: lightThemes.map((theme) {
-                      final isSelected = Prefs().codeHighlightTheme == theme;
-                      return ChoiceChip(
-                        label: Text(theme.displayName),
-                        selected: isSelected,
-                        onSelected: (selected) {
-                          if (selected) {
-                            setState(() {
-                              Prefs().codeHighlightTheme = theme;
-                              epubPlayerKey.currentState?.changeStyle(null);
-                            });
-                          }
-                        },
-                      );
-                    }).toList(),
-                  ),
-                ],
-                // Dark themes section
-                if (Prefs().codeHighlightTheme.isDark) ...[
-                  Text(L10n.of(context).codeHighlightDarkThemes,
-                      style: Theme.of(context).textTheme.bodySmall),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: darkThemes.map((theme) {
-                      final isSelected = Prefs().codeHighlightTheme == theme;
-                      return ChoiceChip(
-                        label: Text(theme.displayName),
-                        selected: isSelected,
-                        onSelected: (selected) {
-                          if (selected) {
-                            setState(() {
-                              Prefs().codeHighlightTheme = theme;
-                              epubPlayerKey.currentState?.changeStyle(null);
-                            });
-                          }
-                        },
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ],
-            ],
-          );
-        },
-      );
-    }
-
     return Container(
-      padding: const EdgeInsets.all(18.0),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         children: [
           downloadFonts(),
@@ -769,12 +695,9 @@ class _ReadingMoreSettingsState extends State<ReadingMoreSettings> {
           columnCount(),
           columnThreshold(),
           convertChinese(),
-          const Divider(height: 15),
           codeHighlightTheme(),
           const Divider(height: 15),
           readingInfo(),
-          // const Divider(height: 8),
-          // bionicReading(),
         ],
       ),
     );

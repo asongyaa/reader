@@ -454,64 +454,96 @@ class _StyleSettingsState extends State<StyleSettings> {
     Widget textAlignment() {
       final items = [
         {
-          "icon": Icons.auto_awesome,
           "text": L10n.of(context).textAlignmentAuto,
           "value": TextAlignmentEnum.auto
         },
         {
-          "icon": Icons.format_align_left,
           "text": L10n.of(context).textAlignmentLeft,
           "value": TextAlignmentEnum.left
         },
         {
-          "icon": Icons.format_align_center,
           "text": L10n.of(context).textAlignmentCenter,
           "value": TextAlignmentEnum.center
         },
         {
-          "icon": Icons.format_align_right,
           "text": L10n.of(context).textAlignmentRight,
           "value": TextAlignmentEnum.right
         },
         {
-          "icon": Icons.format_align_justify,
           "text": L10n.of(context).textAlignmentJustify,
           "value": TextAlignmentEnum.justify
         },
       ];
 
+      String currentLabel() {
+        final current = Prefs().textAlignment;
+        return items.firstWhere((i) => i["value"] == current)["text"] as String;
+      }
+
       return StatefulBuilder(
-        builder: (context, setState) => Row(
-          children: [
-            Icon(Icons.format_align_left,
-                color: Theme.of(context).colorScheme.onSurfaceVariant),
-            const SizedBox(width: 12),
-            Text(L10n.of(context).textAlignment),
-            const Spacer(),
-            DropdownMenu<TextAlignmentEnum>(
-              width: 140,
-              initialSelection: Prefs().textAlignment,
-              inputDecorationTheme: InputDecorationTheme(
-                isDense: false,
-                border: InputBorder.none,
+        builder: (context, setState) => InkWell(
+          onTap: () {
+            showModalBottomSheet(
+              context: context,
+              builder: (ctx) => Padding(
+                padding: EdgeInsets.fromLTRB(
+                    24, 24, 24, MediaQuery.of(ctx).padding.bottom + 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      L10n.of(context).textAlignment,
+                      style: Theme.of(ctx)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 20),
+                    ...items.map((item) {
+                      final isSelected =
+                          item["value"] == Prefs().textAlignment;
+                      return ListTile(
+                        title: Text(item["text"] as String),
+                        trailing: isSelected
+                            ? Icon(Icons.check,
+                                color: Theme.of(ctx).colorScheme.primary)
+                            : null,
+                        onTap: () {
+                          setState(() {
+                            Prefs().textAlignment =
+                                item["value"] as TextAlignmentEnum;
+                            epubPlayerKey.currentState
+                                ?.changeStyle(Prefs().bookStyle);
+                          });
+                          Navigator.pop(ctx);
+                        },
+                      );
+                    }),
+                  ],
+                ),
               ),
-              dropdownMenuEntries: items.map((item) {
-                return DropdownMenuEntry<TextAlignmentEnum>(
-                  value: item["value"] as TextAlignmentEnum,
-                  label: item["text"] as String,
-                  leadingIcon: Icon(item["icon"] as IconData),
-                );
-              }).toList(),
-              onSelected: (value) {
-                if (value != null) {
-                  setState(() {
-                    Prefs().textAlignment = value;
-                    epubPlayerKey.currentState?.changeStyle(Prefs().bookStyle);
-                  });
-                }
-              },
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+            child: Row(
+              children: [
+                Text(L10n.of(context).textAlignment,
+                    style: Theme.of(context).textTheme.titleMedium),
+                const Spacer(),
+                Text(
+                  currentLabel(),
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ),
+                Icon(
+                  Icons.chevron_right,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       );
     }

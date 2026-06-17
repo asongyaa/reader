@@ -10,7 +10,7 @@ final ttsEngineTypeProvider = StateProvider<String>((ref) {
   return Prefs().ttsEngineType;
 });
 
-@riverpod
+@Riverpod(keepAlive: true)
 Future<List<TtsVoice>> ttsVoices(Ref ref) async {
   ref.watch(ttsEngineTypeProvider);
   final tts = TtsFactory().current;

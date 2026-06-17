@@ -5,6 +5,7 @@ import 'package:anx_reader/service/tts/models/tts_voice.dart';
 import 'package:anx_reader/service/tts/online_tts.dart';
 import 'package:anx_reader/service/tts/system_tts.dart';
 import 'package:anx_reader/service/tts/tts_factory.dart';
+import 'package:anx_reader/service/tts/base_tts.dart';
 import 'package:anx_reader/service/tts/tts_handler.dart';
 import 'package:anx_reader/service/tts/tts_service.dart';
 import 'package:anx_reader/service/tts/tts_service_provider.dart';
@@ -43,7 +44,7 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
   String? _currentModelLanguageGroup;
 
   final Map<String, GlobalKey> _languageKeys = {};
-  bool _showVoiceList = false;
+  bool _showVoiceList = true;
   TabController? _voiceTabController;
 
   final Map<String, bool> _modelLoadingStates = {};
@@ -56,8 +57,11 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
     }
 
     try {
+      final handler = TtsHandler();
+      if (handler.isPlaying || handler.ttsStateNotifier.value == TtsStateEnum.paused) {
+        await handler.stop();
+      }
       final tts = TtsFactory().current;
-      await tts.stop();
       if (tts is OnlineTts) {
         if (voiceShortName != null) {
           await tts.speakWithVoice(text, voiceShortName);
@@ -432,10 +436,10 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
                     await TtsHandler().switchEngineType(type.name);
                     ref.read(ttsEngineTypeProvider.notifier).state =
                         type.name;
-                    setState(() {
-                      _showVoiceList = false;
-                      _updateSelectedVoiceFromEngine();
-                    });
+                    _updateSelectedVoiceFromEngine();
+                    setState(() {});
+                    ref.refresh(ttsVoicesProvider);
+                    SmartDialog.showToast('引擎已切换，建议重启应用以确保播放正常');
                   },
                 )),
           ],
@@ -452,11 +456,11 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
       orElse: () => TtsEngineType.system,
     );
 
-    // Listen to config changes to hide voice list (only effective when online)
+    // Listen to config changes to refresh voice list (only effective when online)
     ref.listen(onlineTtsConfigProvider(engineType.name), (prev, next) {
       if (prev != next && engineType.isOnline) {
+        ref.refresh(ttsVoicesProvider);
         setState(() {
-          _showVoiceList = false;
           selectedVoiceModel =
               getTtsServiceProvider(engineType).getSelectedVoice();
         });
@@ -484,9 +488,9 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
               CustomSettingsTile(
                 child: _ModelDownloadCard(
                   onModelDeleted: () {
+                    ref.refresh(ttsVoicesProvider);
                     setState(() {
                       selectedVoiceModel = null;
-                      _showVoiceList = false;
                     });
                   },
                   onModelChanged: () async {
@@ -494,9 +498,9 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
                       TtsEngineType.sherpaOnnx.name,
                       forceRecreate: true,
                     );
+                    ref.refresh(ttsVoicesProvider);
                     setState(() {
-                      _showVoiceList = false;
-                      selectedVoiceModel = 'sid_\${Prefs().offlineTtsSid}';
+                      selectedVoiceModel = 'sid_${Prefs().offlineTtsSid}';
                     });
                   },
                 ),
@@ -526,43 +530,9 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
             CustomSettingsTile(
               child: Padding(
                 padding: const EdgeInsets.all(8.0),
-                child: _showVoiceList
-                    ? Column(
-                        children: [..._buildVoiceListContent()],
-                      )
-                    : Center(
-                        child: AnxButton(
-                          onPressed: () async {
-                            setState(() {
-                              _showVoiceList = true;
-                            });
-                            final currentLocale =
-                                Localizations.localeOf(context);
-                            final voices =
-                                await ref.refresh(ttsVoicesProvider.future);
-                            if (selectedVoiceModel == null &&
-                                voices.isNotEmpty) {
-                              final currentLangCode =
-                                  currentLocale.languageCode;
-
-                              TtsVoice? match = voices.firstWhere(
-                                (v) => v.locale
-                                    .toLowerCase()
-                                    .startsWith(currentLangCode.toLowerCase()),
-                                orElse: () => voices.firstWhere(
-                                  (v) =>
-                                      v.locale.toLowerCase().startsWith('en'),
-                                  orElse: () => voices.first,
-                                ),
-                              );
-
-                              _selectVoiceModel(match.shortName);
-                            }
-                          },
-                          child: Text(
-                              L10n.of(context).settingsNarrateGetVoiceList),
-                        ),
-                      ),
+                child: Column(
+                  children: [..._buildVoiceListContent()],
+                ),
               ),
             )
           ],

@@ -492,9 +492,16 @@ class OnlineTts extends BaseTts {
 
     final bytes = await backend.speak(content, voice, rate, pitch);
     if (bytes.isNotEmpty) {
+      final completer = Completer<void>();
+      final sub = audioPlayer.onPlayerComplete.listen((_) {
+        if (!completer.isCompleted) completer.complete();
+      });
       final source = BytesSource(bytes, mimeType: 'audio/mp3');
       await audioPlayer.play(source);
+      await completer.future;
+      await sub.cancel();
     }
+    await _disposePlayer();
   }
 
   @override
