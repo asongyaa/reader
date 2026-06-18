@@ -1620,6 +1620,16 @@ class Prefs extends ChangeNotifier {
     notifyListeners();
   }
 
+  List<String> get scanDirectories {
+    return prefs.getStringList('scanDirectories') ??
+        ['/storage/emulated/0/Documents', '/storage/emulated/0/Download'];
+  }
+
+  set scanDirectories(List<String> dirs) {
+    prefs.setStringList('scanDirectories', dirs);
+    notifyListeners();
+  }
+
   TextAlignmentEnum get textAlignment {
     return TextAlignmentEnum.fromCode(
         prefs.getString('textAlignment') ?? 'auto');

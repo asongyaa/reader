@@ -8,6 +8,7 @@ import 'package:anx_reader/providers/book_list.dart';
 import 'package:anx_reader/providers/tb_groups.dart';
 import 'package:anx_reader/service/book.dart';
 import 'package:anx_reader/page/search/search_page.dart';
+import 'package:anx_reader/page/scan_books_page.dart';
 import 'package:anx_reader/utils/get_path/get_temp_dir.dart';
 import 'package:anx_reader/utils/platform_utils.dart';
 import 'package:anx_reader/utils/log/common.dart';
@@ -88,6 +89,49 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
     }
     if (!mounted) return;
     importBookList(fileList, context, ref);
+  }
+
+  void _showImportMenu() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.fromLTRB(
+            24, 24, 24, MediaQuery.of(ctx).padding.bottom + 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '导入书籍',
+              style: Theme.of(ctx)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Icons.file_open),
+              title: const Text('导入文件'),
+              subtitle: const Text('从文件管理器选择'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _importBook();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.folder_open),
+              title: const Text('扫描文件夹'),
+              subtitle: const Text('自动扫描本地电子书'),
+              onTap: () {
+                Navigator.pop(ctx);
+                Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => ScanBooksPage()));
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // ── Category menu ───────────────────────────────────────────────
@@ -495,7 +539,7 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
         ]),
       ),
       actions: [
-        IconButton(icon: const Icon(Icons.add), onPressed: _importBook),
+        IconButton(icon: const Icon(Icons.add), onPressed: _showImportMenu),
       ],
     );
 

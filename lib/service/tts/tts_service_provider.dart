@@ -70,9 +70,15 @@ abstract class TtsServiceProvider extends ServiceProvider<TtsEngineType> {
     }
     final selected = getSelectedVoice();
     if (selected.isEmpty) {
-      throw Exception('No voice selected for $engineType');
+      return _fallbackVoice;
     }
     return selected;
+  }
+
+  String get _fallbackVoice {
+    if (engineType == TtsEngineType.edge) return 'zh-CN-XiaoxiaoNeural';
+    if (engineType == TtsEngineType.azure) return 'zh-CN-XiaoxiaoNeural';
+    return '';
   }
 }
 

@@ -136,9 +136,12 @@ class _NarrateSettingsState extends ConsumerState<NarrateSettings>
       orElse: () => TtsEngineType.system,
     );
     if (engineType == TtsEngineType.sherpaOnnx) {
-      selectedVoiceModel = 'sid_\${Prefs().offlineTtsSid}';
+      selectedVoiceModel = 'sid_${Prefs().offlineTtsSid}';
     } else if (engineType.isOnline) {
-      selectedVoiceModel = getTtsServiceProvider(engineType).getSelectedVoice();
+      final voice = getTtsServiceProvider(engineType).getSelectedVoice();
+      selectedVoiceModel = voice.isNotEmpty
+          ? voice
+          : getTtsServiceProvider(engineType).resolveVoice(null);
     } else {
       selectedVoiceModel = Prefs().getTtsVoiceModel('system');
     }

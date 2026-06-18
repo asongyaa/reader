@@ -14,19 +14,22 @@ class AnxToast {
 
   static void show(String message, {Icon? icon, int duration = 2000}) {
     Widget toast = FilledContainer(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          icon ?? const Icon(Icons.info_outline),
-          const SizedBox(
-            width: 12.0,
-          ),
+          icon ??
+              Icon(Icons.info_outline,
+                  size: 18,
+                  color: Theme.of(navigatorKey.currentContext!)
+                      .colorScheme
+                      .onSurface),
+          const SizedBox(width: 10.0),
           Flexible(
             child: Text(
               message,
-              // wrap
               style: TextStyle(
+                fontSize: 14,
                 color: Theme.of(navigatorKey.currentContext!)
                     .colorScheme
                     .onSurface,

@@ -355,7 +355,6 @@ void _showImportDialog(
                       }
 
                       for (var file in filesToImport) {
-                        AnxToast.show(path.basename(file.path));
                         setState(() {
                           currentHandlingFile = file.path;
                         });
@@ -374,25 +373,26 @@ void _showImportDialog(
                         }
                       }
 
-                      // dumplicateFiles will be deleted if skipDuplicates is true
-                      // if skipDuplicates is false, they will be imported
-                      // and then deleted in the importBook function
                       if (skipDuplicates) {
                         for (var file in duplicateFiles) {
                           file.deleteSync();
                         }
                       }
 
-                      setState(() {
-                        finished = true;
-                      });
                       ref.read(syncProvider.notifier).syncData(
                           SyncDirection.upload, ref,
                           trigger: SyncTrigger.auto);
+
+                      Navigator.of(context).pop('dialog');
+                      if (navigatorKey.currentState?.canPop() ?? false) {
+                        navigatorKey.currentState?.pop();
+                      }
+                      final successCount = filesToImport.length - errorFiles.length;
+                      final msg = StringBuffer('导入完成：$successCount 本成功');
+                      if (errorFiles.isNotEmpty) msg.write('，${errorFiles.length} 本失败');
+                      AnxToast.show(msg.toString());
                     },
-                    child: Text(finished
-                        ? L10n.of(context).commonOk
-                        : L10n.of(context).importImportNBooks(
+                    child: Text(L10n.of(context).importImportNBooks(
                             uniqueFiles.length +
                                 (skipDuplicates ? 0 : duplicateFiles.length) -
                                 errorFiles.length))),
@@ -528,7 +528,6 @@ Future<void> saveBook(
       updateTime: DateTime.now());
 
   book.id = await bookDao.insertBook(book);
-  AnxToast.show(L10n.of(navigatorKey.currentContext!).serviceImportSuccess);
   await headlessInAppWebView?.dispose();
   headlessInAppWebView = null;
   return;

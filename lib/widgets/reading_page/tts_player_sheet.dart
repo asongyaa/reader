@@ -315,10 +315,7 @@ class _TtsPlayerSheetState extends ConsumerState<TtsPlayerSheet> {
   }
 
   Widget _buildProgressBar(CurrentReadingState currentReading) {
-    final currentPage = currentReading.chapterCurrentPage ?? 0;
-    final totalPages = currentReading.chapterTotalPages ?? 0;
-    final progress =
-        totalPages > 0 ? (currentPage / totalPages).clamp(0.0, 1.0) : 0.0;
+    final progress = (currentReading.percentage ?? 0.0).clamp(0.0, 1.0);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(32, 24, 32, 16),
@@ -338,9 +335,7 @@ class _TtsPlayerSheetState extends ConsumerState<TtsPlayerSheet> {
           ),
           const SizedBox(height: 8),
           Text(
-            totalPages > 0
-                ? '$currentPage / $totalPages'
-                : '',
+            '${(progress * 100).toStringAsFixed(1)}%',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
