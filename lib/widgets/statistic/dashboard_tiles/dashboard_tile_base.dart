@@ -6,12 +6,10 @@ import 'package:anx_reader/providers/dashboard_tiles_provider.dart';
 import 'package:anx_reader/service/vibration_service.dart';
 import 'package:anx_reader/widgets/common/container/filled_container.dart';
 import 'package:anx_reader/widgets/common/fitted_text.dart';
-import 'package:anx_reader/widgets/statistic/dashboard_tiles/dashboard_tile_detail_view.dart';
 import 'package:anx_reader/widgets/statistic/dashboard_tiles/dashboard_tile_metadata.dart';
 import 'package:anx_reader/widgets/statistic/dashboard_tiles/dashboard_tile_registry.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:heroine/heroine.dart';
 import 'package:staggered_reorderable/staggered_reorderable.dart';
 
 /// Base class for all statistics dashboard tiles.
@@ -81,7 +79,7 @@ abstract class StatisticsDashboardTileBase {
 
   bool get canFlip => true;
 
-  double get flipSquareSize => 120;
+  double get flipSquareSize => 180;
 
   double get flipTitleSize => 100;
 
@@ -186,10 +184,13 @@ abstract class StatisticsDashboardTileBase {
             children: [
               Expanded(
                 child: Container(
-                    margin: const EdgeInsets.all(12),
-                    height: flipSquareSize * metadata.rowSpan -
-                        12 * 2, // minus margin
-                    child: flipContent),
+                  clipBehavior: Clip.hardEdge,
+                  decoration: const BoxDecoration(color: Colors.transparent),
+                  margin: const EdgeInsets.all(12),
+                  height: flipSquareSize * metadata.rowSpan -
+                      12 * 2, // minus margin
+                  child: flipContent,
+                ),
               ),
             ],
           ),
@@ -240,67 +241,57 @@ class DashboardTileShell extends ConsumerWidget {
     final showRemoveButton = state.isEditing && state.workingTiles.length > 1;
 
     final notifier = ref.read(dashboardTilesProvider.notifier);
-    final heroTag = 'dashboard_tile_${tileType.name}';
 
-    return Heroine(
-      tag: heroTag,
-      flightShuttleBuilder: const FlipShuttleBuilder(
-        axis: Axis.vertical,
-        halfFlips: 1,
-      ),
-      motion: Motion.bouncySpring(
-        snapToEnd: true,
-        duration: const Duration(milliseconds: 500),
-      ),
-      child: GestureDetector(
-        onTap: () {
-          if (!tile.canFlip) {
-            tile.onTap(context, ref);
-            return;
-          }
-          VibrationService.medium();
-          Navigator.of(context)
-              .push(
-            PageRouteBuilder(
-              opaque: false,
-              pageBuilder: (context, animation, secondaryAnimation) {
-                return AnimatedBuilder(
-                  animation: animation,
-                  builder: (context, child) {
-                    return DashboardTileDetailView(
-                      tile: tile,
-                      heroTag: heroTag,
-                      animationValue: animation.value,
-                    );
-                  },
-                );
-              },
-            ),
-          )
-              .then((_) {
-            VibrationService.rigid();
-          });
-        },
-        child: Stack(
-          children: [
-            tile.buildTile(context, ref),
-            if (showRemoveButton)
-              Positioned(
-                top: 0,
-                right: 0,
-                child: IconButton.filledTonal(
-                  iconSize: 18,
-                  visualDensity: VisualDensity.compact,
-                  tooltip: L10n.of(context).commonRemove,
-                  onPressed: () {
-                    notifier.removeTile(tileType);
-                    tile.onRemove(context, ref);
-                  },
-                  icon: const Icon(Icons.close),
-                ),
+    return GestureDetector(
+      onTap: () {
+        if (!tile.canFlip) {
+          tile.onTap(context, ref);
+          return;
+        }
+        VibrationService.medium();
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => _TileDetailPage(tile: tile),
+          ),
+        ).then((_) {
+          VibrationService.rigid();
+        });
+      },
+      child: Stack(
+        children: [
+          tile.buildTile(context, ref),
+          if (showRemoveButton)
+            Positioned(
+              top: 0,
+              right: 0,
+              child: IconButton.filledTonal(
+                iconSize: 18,
+                visualDensity: VisualDensity.compact,
+                tooltip: L10n.of(context).commonRemove,
+                onPressed: () {
+                  notifier.removeTile(tileType);
+                  tile.onRemove(context, ref);
+                },
+                icon: const Icon(Icons.close),
               ),
-          ],
-        ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TileDetailPage extends ConsumerWidget {
+  const _TileDetailPage({required this.tile});
+  final StatisticsDashboardTileBase tile;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      appBar: AppBar(title: Text(tile.metadata.title)),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: tile.buildFlipSide(context, ref),
       ),
     );
   }

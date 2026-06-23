@@ -2,7 +2,8 @@ import 'package:anx_reader/l10n/generated/L10n.dart';
 import 'package:anx_reader/page/home_page/notes_page.dart';
 import 'package:anx_reader/page/home_page/settings_page.dart';
 import 'package:anx_reader/page/home_page/statistics_page.dart';
-import 'package:anx_reader/widgets/statistic/statistics_dashboard_title.dart';
+import 'package:anx_reader/providers/total_reading_time.dart';
+import 'package:anx_reader/widgets/common/async_skeleton_wrapper.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -146,6 +147,26 @@ class _ReadTimeSubtitle extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return const TotalReadTime();
+    return const _CompactReadTime();
+  }
+}
+
+class _CompactReadTime extends ConsumerWidget {
+  const _CompactReadTime();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
+    return AsyncSkeletonWrapper<int>(
+      asyncValue: ref.watch(totalReadingTimeProvider),
+      builder: (seconds, _) {
+        final hours = seconds ~/ 3600;
+        final minutes = (seconds % 3600) ~/ 60;
+        return Text(
+          '${L10n.of(context).commonHours(hours)}${L10n.of(context).commonMinutes(minutes)}',
+          style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+        );
+      },
+    );
   }
 }

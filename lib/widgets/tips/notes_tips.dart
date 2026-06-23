@@ -4,34 +4,31 @@ import 'package:flutter/material.dart';
 class NotesTips extends StatelessWidget {
   const NotesTips({super.key});
 
-  final TextStyle textStyleBig = const TextStyle(
-    fontSize: 20,
-    fontWeight: FontWeight.bold,
-  );
-  final TextStyle textStyle = const TextStyle(
-    fontSize: 15,
-  );
-
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Text('o(TヘTo) ',
-              style: TextStyle(
-                  fontSize: 50,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey)),
-          const SizedBox(height: 50),
+          Icon(Icons.edit_note_outlined,
+              size: 48, color: cs.onSurfaceVariant),
+          const SizedBox(height: 16),
           Text(
             L10n.of(context).notesTips_1,
-            style: textStyleBig,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: cs.onSurface,
+            ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           Text(
             L10n.of(context).notesTips_2,
-            style: textStyle,
+            style: TextStyle(
+              fontSize: 14,
+              color: cs.onSurfaceVariant,
+            ),
           ),
         ],
       ),

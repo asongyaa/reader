@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:anx_reader/config/shared_preference_provider.dart';
 import 'package:anx_reader/dao/book.dart';
 import 'package:anx_reader/l10n/generated/L10n.dart';
 import 'package:anx_reader/models/book.dart';
@@ -12,7 +11,6 @@ import 'package:anx_reader/page/search/search_page.dart';
 import 'package:anx_reader/page/scan_books_page.dart';
 import 'package:anx_reader/utils/get_path/get_temp_dir.dart';
 import 'package:anx_reader/utils/platform_utils.dart';
-import 'package:anx_reader/utils/log/common.dart';
 import 'package:anx_reader/widgets/bookshelf/book_cover.dart';
 import 'package:anx_reader/widgets/common/container/filled_container.dart';
 import 'package:anx_reader/widgets/tips/bookshelf_tips.dart';
@@ -617,18 +615,9 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
       ],
     );
 
-    return Container(
-      decoration: Prefs().eInkMode ? null : BoxDecoration(
-        gradient: RadialGradient(
-          tileMode: TileMode.clamp, center: Alignment.topRight, radius: 1,
-          colors: [cs.primary.withAlpha(5), Theme.of(context).scaffoldBackgroundColor],
-        ),
-      ),
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: appBar,
-        body: Column(children: [searchBar, Expanded(child: body)]),
-      ),
+    return Scaffold(
+      appBar: appBar,
+      body: Column(children: [searchBar, Expanded(child: body)]),
     );
   }
 }

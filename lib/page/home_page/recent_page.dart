@@ -32,77 +32,43 @@ class _RecentPageState extends ConsumerState<RecentPage>
     } else if (booksAsync.hasError || !booksAsync.hasValue) {
       body = Center(child: Text('Error: ${booksAsync.error}', style: TextStyle(color: cs.error)));
     } else {
-      final all = booksAsync.requireValue.expand((g) => g).toList();
+      final all = booksAsync.requireValue.expand((g) => g).toList()
+        ..sort((a, b) => b.updateTime.compareTo(a.updateTime));
       if (all.isEmpty) {
         body = Center(child: Text('暂无阅读记录', style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant)));
       } else {
         final now = DateTime.now();
-        final readingBooks = all
-            .where((b) => b.readingPercentage > 0.02 && b.readingPercentage < 0.98)
-            .toList()
-          ..sort((a, b) => b.updateTime.compareTo(a.updateTime));
-        final current = readingBooks.isNotEmpty ? readingBooks.first : null;
+        final current = all.firstWhere(
+          (b) => b.readingPercentage > 0.02,
+          orElse: () => all.first,
+        );
+        final rest = all.where((b) => b.id != current.id).toList();
 
-        final finished = all
-            .where((b) => b.readingPercentage >= 0.98)
-            .toList()
-          ..sort((a, b) => b.updateTime.compareTo(a.updateTime));
-
-        final thisWeek = finished
+        final thisWeek = rest
             .where((b) => b.updateTime.isAfter(now.subtract(const Duration(days: 7))))
             .toList();
-        final thisMonth = finished
+        final thisMonth = rest
             .where((b) => b.updateTime.isAfter(now.subtract(const Duration(days: 30))) &&
                 !b.updateTime.isAfter(now.subtract(const Duration(days: 7))))
             .toList();
-        final last3Months = finished
-            .where((b) => b.updateTime.isAfter(now.subtract(const Duration(days: 90))) &&
-                !b.updateTime.isAfter(now.subtract(const Duration(days: 30))))
-            .toList();
-        final last6Months = finished
-            .where((b) => b.updateTime.isAfter(now.subtract(const Duration(days: 180))) &&
-                !b.updateTime.isAfter(now.subtract(const Duration(days: 90))))
-            .toList();
-        final lastYear = finished
-            .where((b) => b.updateTime.isAfter(now.subtract(const Duration(days: 365))) &&
-                !b.updateTime.isAfter(now.subtract(const Duration(days: 180))))
-            .toList();
-        final older = finished
-            .where((b) => !b.updateTime.isAfter(now.subtract(const Duration(days: 365))))
+        final older = rest
+            .where((b) => !b.updateTime.isAfter(now.subtract(const Duration(days: 30))))
             .toList();
 
-        final hasAnyContent = current != null ||
-            thisWeek.isNotEmpty ||
-            thisMonth.isNotEmpty ||
-            last3Months.isNotEmpty ||
-            last6Months.isNotEmpty ||
-            lastYear.isNotEmpty ||
-            older.isNotEmpty;
+        final hasAnyContent = thisWeek.isNotEmpty || thisMonth.isNotEmpty || older.isNotEmpty;
 
         body = ListView(
           controller: _scrollController,
           padding: EdgeInsets.fromLTRB(16, topPadding + 8, 16, 80),
           children: [
-            if (current != null) _buildCurrent(context, current, cs),
-            if (current != null) const SizedBox(height: 16),
+            _buildCurrent(context, current, cs),
+            const SizedBox(height: 16),
             if (thisWeek.isNotEmpty) ...[
-              _buildSection(context, '本周已读', thisWeek, cs),
+              _buildSection(context, '本周', thisWeek, cs),
               const SizedBox(height: 12),
             ],
             if (thisMonth.isNotEmpty) ...[
-              _buildSection(context, '本月已读', thisMonth, cs),
-              const SizedBox(height: 12),
-            ],
-            if (last3Months.isNotEmpty) ...[
-              _buildSection(context, '三月内已读', last3Months, cs),
-              const SizedBox(height: 12),
-            ],
-            if (last6Months.isNotEmpty) ...[
-              _buildSection(context, '半年内已读', last6Months, cs),
-              const SizedBox(height: 12),
-            ],
-            if (lastYear.isNotEmpty) ...[
-              _buildSection(context, '近一年已读', lastYear, cs),
+              _buildSection(context, '本月', thisMonth, cs),
               const SizedBox(height: 12),
             ],
             if (older.isNotEmpty) ...[
@@ -125,7 +91,7 @@ class _RecentPageState extends ConsumerState<RecentPage>
   }
 
   Widget _buildCurrent(BuildContext ctx, Book book, ColorScheme cs) {
-    final pct = (book.readingPercentage * 100).toInt();
+    final pct = ((book.readingPercentage).clamp(0.0, 1.0) * 100).toInt();
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Card(
@@ -149,9 +115,9 @@ class _RecentPageState extends ConsumerState<RecentPage>
                     const SizedBox(height: 6),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(3),
-                      child: LinearProgressIndicator(value: book.readingPercentage, minHeight: 5),
+                      child: LinearProgressIndicator(value: book.readingPercentage.clamp(0.0, 1.0), minHeight: 5),
                     ),
-                    const Spacer(),
+                    const SizedBox(height: 12),
                     Align(
                       alignment: Alignment.centerRight,
                       child: FilledButton.icon(

@@ -56,9 +56,7 @@ class _StatisticPageState extends State<StatisticPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // appBar: AppBar(
-      //   title: Text(context.navBarStatistics),
-      // ),
+      appBar: AppBar(title: const Text('阅读统计')),
       body: SafeArea(
         bottom: false,
         child: Padding(
@@ -131,12 +129,10 @@ class DateBooks extends ConsumerStatefulWidget {
 }
 
 class _DateBooksState extends ConsumerState<DateBooks> {
-  final TextStyle titleStyle = const TextStyle(
-    fontSize: 30,
-    fontFamily: 'SourceHanSerif',
-    fontWeight: FontWeight.bold,
-    overflow: TextOverflow.ellipsis,
-  );
+  TextStyle get titleStyle => Theme.of(context).textTheme.titleLarge!.copyWith(
+        fontWeight: FontWeight.bold,
+        overflow: TextOverflow.ellipsis,
+      );
 
   List<int> deleteBookIds = [];
 
@@ -155,6 +151,7 @@ class _DateBooksState extends ConsumerState<DateBooks> {
     Widget dragToDelete(Widget child, int bookId) {
       return StatefulBuilder(builder: (context, localSetState) {
         if (deleteBookIds.contains(bookId)) {
+          final cs = Theme.of(context).colorScheme;
           return OutlinedContainer(
             margin: const EdgeInsets.only(bottom: 10),
             height: 146,
@@ -165,17 +162,17 @@ class _DateBooksState extends ConsumerState<DateBooks> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    Row(
                       children: [
-                        Icon(
-                          Icons.delete,
-                          size: 30,
-                        ),
+                        Icon(Icons.delete,
+                            size: 16, color: cs.error),
+                        const SizedBox(width: 8),
                         Text(
                           L10n.of(context).statisticDeletedRecords,
                           style: TextStyle(
-                              fontSize: 20, fontWeight: FontWeight.bold),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: cs.error),
                         ),
                       ],
                     ),
@@ -192,8 +189,16 @@ class _DateBooksState extends ConsumerState<DateBooks> {
                 const Divider(),
                 Row(
                   children: [
-                    Icon(Icons.info_outline, size: 18),
-                    Text(L10n.of(context).statisticDeletedRecordsTips),
+                    Icon(Icons.info_outline,
+                        size: 16, color: cs.onSurfaceVariant),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        L10n.of(context).statisticDeletedRecordsTips,
+                        style: TextStyle(
+                            fontSize: 12, color: cs.onSurfaceVariant),
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -294,34 +299,38 @@ class BookStatisticItem extends StatelessWidget {
 
   final int bookId;
   final int readingTime;
-  final TextStyle bookTitleStyle = const TextStyle(
-    fontSize: 20,
-    fontFamily: 'SourceHanSerif',
-    fontWeight: FontWeight.bold,
-    overflow: TextOverflow.ellipsis,
-  );
-  final TextStyle bookAuthorStyle = const TextStyle(
-    fontSize: 12,
-    color: Colors.grey,
-    overflow: TextOverflow.ellipsis,
-  );
-  final TextStyle bookReadingTimeStyle = const TextStyle(
-    fontSize: 18,
-    fontWeight: FontWeight.bold,
-  );
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final bookTitleStyle = Theme.of(context)
+        .textTheme
+        .titleSmall
+        ?.copyWith(
+          fontWeight: FontWeight.w600,
+          overflow: TextOverflow.ellipsis,
+        );
+    final bookAuthorStyle = TextStyle(
+      fontSize: 12,
+      color: cs.onSurfaceVariant,
+      overflow: TextOverflow.ellipsis,
+    );
+    final bookReadingTimeStyle = TextStyle(
+      fontSize: 12,
+      color: cs.onSurfaceVariant,
+    );
+
     return FutureBuilder<Book>(
       future: bookDao.selectBookById(bookId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done) {
+          final book = snapshot.data!;
           return GestureDetector(
             onTap: () {
               Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) => BookDetail(book: snapshot.data!)));
+                      builder: (context) => BookDetail(book: book)));
             },
             child: FilledContainer(
               margin: const EdgeInsets.only(bottom: 10),
@@ -329,48 +338,44 @@ class BookStatisticItem extends StatelessWidget {
               child: Row(
                 children: [
                   Hero(
-                      tag: snapshot.data!.coverFullPath,
+                      tag: book.coverFullPath,
                       child: BookCover(
-                        book: snapshot.data!,
-                        height: 130,
-                        width: 90,
-                        radius: 20,
+                        book: book,
+                        height: 100,
+                        width: 68,
+                        radius: 8,
                       )),
                   const SizedBox(width: 15),
                   Flexible(
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(snapshot.data!.title, style: bookTitleStyle),
+                          Text(book.title, style: bookTitleStyle),
+                          const SizedBox(height: 6),
+                          Text(book.author, style: bookAuthorStyle),
                           const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Expanded(
-                                flex: 3,
-                                child: Text(snapshot.data!.author,
-                                    style: bookAuthorStyle),
-                              ),
-                              Text(
-                                  // getReadingTime(context),
-                                  convertSeconds(readingTime),
-                                  textAlign: TextAlign.end,
-                                  style: bookReadingTimeStyle),
-                            ],
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(3),
+                            child: LinearProgressIndicator(
+                              value: book.readingPercentage,
+                              minHeight: 4,
+                              backgroundColor: cs.surfaceContainerHighest,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                  cs.primary),
+                            ),
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 8),
                           Row(
                             children: [
-                              Expanded(
-                                child: LinearProgressIndicator(
-                                  value: snapshot.data!.readingPercentage,
-                                  backgroundColor: Colors.grey[300],
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                      Theme.of(context).colorScheme.primary),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
+                              Icon(Icons.access_time,
+                                  size: 14, color: cs.onSurfaceVariant),
+                              const SizedBox(width: 4),
+                              Text(convertSeconds(readingTime),
+                                  style: bookReadingTimeStyle),
+                              const Spacer(),
                               Text(
-                                  '${(snapshot.data!.readingPercentage * 100).toInt()} %'),
+                                  '${(book.readingPercentage * 100).toInt()}%',
+                                  style: bookReadingTimeStyle),
                             ],
                           ),
                         ]),

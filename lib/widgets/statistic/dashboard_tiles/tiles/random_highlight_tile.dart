@@ -130,21 +130,30 @@ class _EmptyHighlight extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const Icon(Icons.sticky_note_2_outlined, size: 32),
-        const SizedBox(height: 8),
-        Text(
-          L10n.of(context).randomHighlightEmptyState,
-          style: theme.textTheme.bodyMedium,
-        ),
-        TextButton.icon(
-          onPressed: onRefresh,
-          icon: const Icon(Icons.refresh),
-          label: Text(L10n.of(context).commonRefresh),
-        ),
-      ],
+    return SizedBox.expand(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.format_quote_outlined,
+            size: 32,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            L10n.of(context).randomHighlightEmptyState,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          TextButton.icon(
+            onPressed: onRefresh,
+            icon: const Icon(Icons.refresh, size: 18),
+            label: Text(L10n.of(context).commonRefresh),
+          ),
+        ],
+      ),
     );
   }
 }

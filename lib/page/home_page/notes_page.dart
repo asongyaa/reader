@@ -1,4 +1,3 @@
-import 'package:anx_reader/l10n/generated/L10n.dart';
 import 'package:anx_reader/models/book.dart';
 import 'package:anx_reader/page/book_notes_page.dart';
 import 'package:anx_reader/providers/notes_page_current_book.dart';
@@ -6,7 +5,6 @@ import 'package:anx_reader/providers/notes_statistics.dart';
 import 'package:anx_reader/utils/date/convert_seconds.dart';
 import 'package:anx_reader/widgets/bookshelf/book_cover.dart';
 import 'package:anx_reader/widgets/common/container/filled_container.dart';
-import 'package:anx_reader/widgets/highlight_digit.dart';
 import 'package:anx_reader/widgets/tips/notes_tips.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,53 +24,50 @@ class _NotesPageState extends ConsumerState<NotesPage> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      bottom: false,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth > 600) {
-            return Row(
-              children: [
-                Expanded(
-                  flex: 1,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      notesStatistic(),
-                      bookNotesList(false),
-                    ],
+    return Scaffold(
+      appBar: AppBar(title: const Text('笔记')),
+      body: SafeArea(
+        bottom: false,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth > 600) {
+              return Row(
+                children: [
+                  Expanded(
+                    flex: 1,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        notesStatistic(),
+                        bookNotesList(false),
+                      ],
+                    ),
                   ),
-                ),
-                const VerticalDivider(thickness: 1, width: 1),
-                const Expanded(
-                  flex: 2,
-                  child: NotesDetail(),
-                ),
-              ],
-            );
-          } else {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                notesStatistic(),
-                bookNotesList(true),
-              ],
-            );
-          }
-        },
+                  const VerticalDivider(thickness: 1, width: 1),
+                  const Expanded(
+                    flex: 2,
+                    child: NotesDetail(),
+                  ),
+                ],
+              );
+            } else {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  notesStatistic(),
+                  bookNotesList(true),
+                ],
+              );
+            }
+          },
+        ),
       ),
     );
   }
 
   Widget notesStatistic() {
     final notesStats = ref.watch(notesStatisticsProvider);
-
-    TextStyle digitStyle = const TextStyle(
-      fontSize: 24,
-      fontWeight: FontWeight.bold,
-    );
-    TextStyle textStyle =
-        const TextStyle(fontSize: 18, fontFamily: 'SourceHanSerif');
+    final cs = Theme.of(context).colorScheme;
 
     return notesStats.when(
       data: (data) {
@@ -80,26 +75,51 @@ class _NotesPageState extends ConsumerState<NotesPage> {
           bottom: false,
           child: Padding(
             padding: const EdgeInsets.all(10.0),
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              highlightDigit(
-                context,
-                L10n.of(context).notesNotesAcross(data['numberOfNotes']!),
-                textStyle,
-                digitStyle,
-              ),
-              highlightDigit(
-                context,
-                L10n.of(context).notesBooks(data['numberOfBooks']!),
-                textStyle,
-                digitStyle,
-              ),
-            ]),
+            child: Row(
+              children: [
+                _buildStatChip(
+                  icon: Icons.edit_note_outlined,
+                  label: '${data['numberOfNotes']!} 条笔记',
+                  cs: cs,
+                ),
+                const SizedBox(width: 10),
+                _buildStatChip(
+                  icon: Icons.book_outlined,
+                  label: '${data['numberOfBooks']!} 本书',
+                  cs: cs,
+                ),
+              ],
+            ),
           ),
         );
       },
-      loading: () => const CircularProgressIndicator(),
+      loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, stack) => Text('Error: $error'),
+    );
+  }
+
+  Widget _buildStatChip({
+    required IconData icon,
+    required String label,
+    required ColorScheme cs,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: cs.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(fontSize: 13, color: cs.onSurface),
+          ),
+        ],
+      ),
     );
   }
 
@@ -112,7 +132,7 @@ class _NotesPageState extends ConsumerState<NotesPage> {
             ? const Expanded(child: Center(child: NotesTips()))
             : Expanded(
                 child: ListView.builder(
-                    padding: EdgeInsets.only(bottom: 80),
+                    padding: const EdgeInsets.only(bottom: 80),
                     controller: _scrollController,
                     itemCount: data.length,
                     itemBuilder: (context, index) {
@@ -125,7 +145,7 @@ class _NotesPageState extends ConsumerState<NotesPage> {
                     }),
               );
       },
-      loading: () => const CircularProgressIndicator(),
+      loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, stack) => Text('Error: $error'),
     );
   }
@@ -136,23 +156,7 @@ class _NotesPageState extends ConsumerState<NotesPage> {
     required bool isMobile,
     required int readingTime,
   }) {
-    TextStyle digitStyle = const TextStyle(
-      fontSize: 28,
-      fontWeight: FontWeight.bold,
-    );
-    TextStyle textStyle = const TextStyle(
-      fontSize: 20,
-    );
-    TextStyle titleStyle = const TextStyle(
-      overflow: TextOverflow.ellipsis,
-      fontSize: 18,
-      fontFamily: 'SourceHanSerif',
-      fontWeight: FontWeight.bold,
-    );
-    TextStyle readingTimeStyle = const TextStyle(
-      fontSize: 14,
-      color: Colors.grey,
-    );
+    final cs = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: () {
         if (isMobile) {
@@ -172,8 +176,8 @@ class _NotesPageState extends ConsumerState<NotesPage> {
         }
       },
       child: FilledContainer(
-        margin: const EdgeInsets.only(top: 8, left: 15, right: 15),
-        padding: const EdgeInsets.all(8.0),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        padding: const EdgeInsets.all(12),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -182,32 +186,37 @@ class _NotesPageState extends ConsumerState<NotesPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  highlightDigit(
-                    context,
-                    L10n.of(context).notesNotes(numberOfNotes),
-                    textStyle,
-                    digitStyle,
+                  Text(
+                    book.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleSmall
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '$numberOfNotes 条笔记',
+                    style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
                   ),
                   const SizedBox(height: 8),
-                  Text(book.title, style: titleStyle),
-                  const SizedBox(height: 18),
-                  // Reading time
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     child: Row(
                       children: [
-                        Icon(Icons.access_time, size: 16, color: Colors.grey),
+                        Icon(Icons.access_time, size: 14, color: cs.onSurfaceVariant),
                         const SizedBox(width: 4),
                         Text(
                           convertSeconds(readingTime),
-                          style: readingTimeStyle,
+                          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                         ),
-                        Text(" | ", style: readingTimeStyle),
-                        Icon(Icons.bar_chart, size: 16, color: Colors.grey),
+                        Text(" | ", style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+                        Icon(Icons.bar_chart, size: 14, color: cs.onSurfaceVariant),
                         const SizedBox(width: 4),
                         Text(
                           '${(book.readingPercentage * 100).toStringAsFixed(1)}%',
-                          style: readingTimeStyle,
+                          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                         ),
                       ],
                     ),
@@ -215,16 +224,15 @@ class _NotesPageState extends ConsumerState<NotesPage> {
                 ],
               ),
             ),
-            // Expanded(child: SizedBox()),
             Hero(
               tag: isMobile
                   ? book.coverFullPath
                   : '${book.coverFullPath}notMobile',
               child: BookCover(
                 book: book,
-                height: 130,
-                width: 90,
-                radius: 20,
+                height: 100,
+                width: 68,
+                radius: 8,
               ),
             ),
           ],
@@ -247,7 +255,7 @@ class NotesDetail extends ConsumerWidget {
                 numberOfNotes: current.numberOfNotes);
           },
           loading: () => const CircularProgressIndicator(),
-          error: (error, stack) => NotesTips(),
+          error: (error, stack) => const NotesTips(),
         );
   }
 }

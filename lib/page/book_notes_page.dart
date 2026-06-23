@@ -8,7 +8,6 @@ import 'package:anx_reader/widgets/book_notes/book_notes_list.dart';
 import 'package:anx_reader/models/book.dart';
 import 'package:anx_reader/page/book_detail.dart';
 import 'package:anx_reader/widgets/common/container/filled_container.dart';
-import 'package:anx_reader/widgets/highlight_digit.dart';
 import 'package:anx_reader/widgets/icon_and_text.dart';
 import 'package:anx_reader/providers/book_notes.dart';
 import 'package:flutter/material.dart';
@@ -33,12 +32,10 @@ class BookNotesPage extends ConsumerStatefulWidget {
 
 class _BookNotesPageState extends ConsumerState<BookNotesPage> {
   Widget bookInfo(BuildContext context, Book book, int numberOfNotes) {
-    TextStyle titleStyle = const TextStyle(
-      fontSize: 24,
-      fontWeight: FontWeight.bold,
-      overflow: TextOverflow.ellipsis,
-      fontFamily: 'SourceHanSerif',
-    );
+    final titleStyle = Theme.of(context)
+        .textTheme
+        .titleMedium
+        ?.copyWith(fontWeight: FontWeight.bold);
     return FilledContainer(
       padding: const EdgeInsets.all(10.0),
       child: LayoutBuilder(builder: (context, constraints) {
@@ -54,7 +51,7 @@ class _BookNotesPageState extends ConsumerState<BookNotesPage> {
                       style: titleStyle,
                       maxLines: 1,
                     ),
-                    notesStatistic(context, numberOfNotes, book),
+                    _buildNotesInfo(context, numberOfNotes, book),
                     const SizedBox(
                       height: 25,
                     ),
@@ -67,9 +64,9 @@ class _BookNotesPageState extends ConsumerState<BookNotesPage> {
                   tag: book.coverFullPath,
                   child: BookCover(
                     book: book,
-                    height: 180,
-                    width: 120,
-                    radius: 20,
+                    height: 140,
+                    width: 95,
+                    radius: 8,
                   )),
             ],
           );
@@ -87,7 +84,7 @@ class _BookNotesPageState extends ConsumerState<BookNotesPage> {
                           style: titleStyle,
                           maxLines: 2,
                         ),
-                        notesStatistic(context, numberOfNotes, book),
+                        _buildNotesInfo(context, numberOfNotes, book),
                         const SizedBox(
                           height: 25,
                         ),
@@ -99,9 +96,9 @@ class _BookNotesPageState extends ConsumerState<BookNotesPage> {
                       tag: book.coverFullPath,
                       child: BookCover(
                         book: book,
-                        height: 180,
-                        width: 120,
-                        radius: 20,
+                        height: 140,
+                        width: 95,
+                        radius: 8,
                       )),
                 ],
               ),
@@ -377,28 +374,19 @@ class _BookNotesPageState extends ConsumerState<BookNotesPage> {
     ]);
   }
 
-  Widget notesStatistic(BuildContext context, int numberOfNotes, Book book) {
-    TextStyle digitStyle = TextStyle(
-      fontSize: 28,
-      fontWeight: FontWeight.bold,
-      color: Theme.of(context).textTheme.bodyLarge!.color,
-    );
-    TextStyle textStyle = TextStyle(
-        fontSize: 18,
-        color: Theme.of(context).textTheme.bodyLarge!.color,
-        fontFamily: 'SourceHanSerif');
+  Widget _buildNotesInfo(BuildContext context, int numberOfNotes, Book book) {
+    final cs = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        highlightDigit(
-          context,
-          L10n.of(context).notesNotes(numberOfNotes),
-          textStyle,
-          digitStyle,
-        ),
         Text(
-          L10n.of(context).notesReadPercentage(
-              '${(book.readingPercentage * 100).toStringAsFixed(2)}%'),
+          '$numberOfNotes 条笔记',
+          style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          '阅读进度 ${(book.readingPercentage * 100).toStringAsFixed(1)}%',
+          style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
         ),
       ],
     );
@@ -419,7 +407,7 @@ class _BookNotesPageState extends ConsumerState<BookNotesPage> {
           padding: const EdgeInsets.all(20),
           children: [
             bookInfo(context, widget.book, widget.numberOfNotes),
-            const SizedBox(height: 170),
+            const SizedBox(height: 24),
             BookNotesList(
                 book: widget.book,
                 reading: false,
