@@ -52,6 +52,26 @@ String _normalizeLineBreaks(String input) {
   return input.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
 }
 
+/// Extract a title from the first non-empty line of content,
+/// truncating if too long and stripping common prefixes.
+String _extractTitleFromContent(String content, int index) {
+  final firstLine = content
+      .split('\n')
+      .map((l) => l.trim())
+      .firstWhere((l) => l.isNotEmpty, orElse: () => '');
+
+  if (firstLine.isEmpty) {
+    return 'No.${index + 1}';
+  }
+
+  // If first line is very long (>30 chars), truncate it
+  if (firstLine.length > 30) {
+    return '${firstLine.substring(0, 30)}…';
+  }
+
+  return firstLine;
+}
+
 List<Section> _buildSectionsFromMatches({
   required String content,
   required List<RegExpMatch> matches,
@@ -64,7 +84,7 @@ List<Section> _buildSectionsFromMatches({
   if (firstMatch.start > 0) {
     final intro = content.substring(0, firstMatch.start).trim();
     if (intro.isNotEmpty) {
-      sections.add(Section('', intro, singleLevel));
+      sections.add(Section(_extractTitleFromContent(intro, 0), intro, singleLevel));
     }
   }
 
@@ -100,18 +120,22 @@ List<Section> _fallbackChunking(String filename, String content) {
   var startIndex = 0;
   while (startIndex < content.length) {
     final endIndex = startIndex + 20000;
+    String chunk;
     if (endIndex >= content.length) {
-      sections.add(Section('No.${sections.length + 1}',
-          content.substring(startIndex).trim(), singleLevel));
-      break;
+      chunk = content.substring(startIndex).trim();
+    } else {
+      final nextNewline = content.indexOf('\n', endIndex);
+      final chapterEndIndex = nextNewline == -1 ? content.length : nextNewline;
+      chunk = content.substring(startIndex, chapterEndIndex).trim();
+      startIndex = chapterEndIndex + 1;
     }
 
-    final nextNewline = content.indexOf('\n', endIndex);
-    final chapterEndIndex = nextNewline == -1 ? content.length : nextNewline;
+    final title = _extractTitleFromContent(chunk, sections.length);
+    sections.add(Section(title, chunk, singleLevel));
 
-    sections.add(Section('No.${sections.length + 1}',
-        content.substring(startIndex, chapterEndIndex).trim(), singleLevel));
-    startIndex = chapterEndIndex + 1;
+    if (endIndex >= content.length) {
+      break;
+    }
   }
 
   return sections;

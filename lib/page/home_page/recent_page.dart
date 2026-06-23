@@ -71,19 +71,13 @@ class _RecentPageState extends ConsumerState<RecentPage>
             .where((b) => !b.updateTime.isAfter(now.subtract(const Duration(days: 365))))
             .toList();
 
-        final recentAdded = all
-            .where((b) => b.readingPercentage <= 0.02)
-            .toList()
-          ..sort((a, b) => b.updateTime.compareTo(a.updateTime));
-
         final hasAnyContent = current != null ||
             thisWeek.isNotEmpty ||
             thisMonth.isNotEmpty ||
             last3Months.isNotEmpty ||
             last6Months.isNotEmpty ||
             lastYear.isNotEmpty ||
-            older.isNotEmpty ||
-            recentAdded.isNotEmpty;
+            older.isNotEmpty;
 
         body = ListView(
           controller: _scrollController,
@@ -114,12 +108,6 @@ class _RecentPageState extends ConsumerState<RecentPage>
             if (older.isNotEmpty) ...[
               _buildSection(context, '更早', older, cs),
               const SizedBox(height: 12),
-            ],
-            if (recentAdded.isNotEmpty) ...[
-              if (current != null || thisWeek.isNotEmpty || thisMonth.isNotEmpty ||
-                  last3Months.isNotEmpty || last6Months.isNotEmpty || lastYear.isNotEmpty || older.isNotEmpty)
-                const SizedBox(height: 12),
-              _buildSection(context, '最近添加', recentAdded, cs),
             ],
             if (!hasAnyContent)
               Center(child: Padding(

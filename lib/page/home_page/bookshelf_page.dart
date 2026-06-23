@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:anx_reader/config/shared_preference_provider.dart';
+import 'package:anx_reader/dao/book.dart';
 import 'package:anx_reader/l10n/generated/L10n.dart';
 import 'package:anx_reader/models/book.dart';
 import 'package:anx_reader/models/tb_group.dart';
@@ -52,6 +53,7 @@ class BookshelfPage extends ConsumerStatefulWidget {
 
 class BookshelfPageState extends ConsumerState<BookshelfPage>
     with AutomaticKeepAliveClientMixin {
+  static const double _kTitleHeight = 34.0; // 2 lines of bodySmall
   late final _scrollController = widget.controller ?? ScrollController();
   _CategoryMode _currentCategory = _CategoryMode.allBooks;
 
@@ -151,9 +153,14 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
   // ── Body builders ───────────────────────────────────────────────
   Widget _bookTap(Book b, BuildContext ctx) =>
       GestureDetector(
-        onTap: () => pushToReadingPage(ref, ctx, b),
         onLongPress: () => _showBookMenu(b),
-        child: BookCover(book: b, width: 100, height: 150),
+        child: SizedBox(
+          width: 100,
+          child: AspectRatio(
+            aspectRatio: 2 / 3,
+            child: BookCover(book: b),
+          ),
+        ),
       );
 
   void _showBookMenu(Book book) {
@@ -178,6 +185,7 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
             ),
             const SizedBox(height: 20),
             ListTile(
+              leading: const Icon(Icons.folder_outlined),
               title: const Text('加入合集'),
               trailing: const Icon(Icons.chevron_right, size: 20),
               onTap: () {
@@ -187,16 +195,57 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
             ),
             if (book.groupId != 0)
               ListTile(
+                leading: const Icon(Icons.folder_off_outlined),
                 title: const Text('移出合集'),
                 onTap: () {
                   ref.read(bookListProvider.notifier).removeFromGroup(book);
                   Navigator.pop(ctx);
                 },
               ),
+            ListTile(
+              leading: Icon(Icons.delete_outline,
+                  color: Theme.of(ctx).colorScheme.error),
+              title: Text(l10n.commonDelete,
+                  style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _confirmDeleteBook(book);
+              },
+            ),
           ],
         ),
       ),
     );
+  }
+
+  void _confirmDeleteBook(Book book) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(L10n.of(context).commonDelete),
+        content: Text('确定删除「${book.title}」吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(L10n.of(context).commonCancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            child: Text(L10n.of(context).commonConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await bookDao.updateBook(book.copyWith(isDeleted: true, updateTime: DateTime.now()));
+    ref.read(bookListProvider.notifier).refresh();
+    final file = File(book.fileFullPath);
+    if (await file.exists()) await file.delete();
+    final cover = File(book.coverFullPath);
+    if (await cover.exists()) await cover.delete();
   }
 
   void _showCollectionPicker(Book book) async {
@@ -325,26 +374,51 @@ class BookshelfPageState extends ConsumerState<BookshelfPage>
   /// allBooks: simple grid, no cards
   Widget _buildAllBooks(List<Book> books) {
     if (books.isEmpty) return const Center(child: BookshelfTips());
-    return GridView.builder(
-      controller: _scrollController,
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 80),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3, childAspectRatio: 0.55, mainAxisSpacing: 16, crossAxisSpacing: 12),
-      itemCount: books.length,
-      itemBuilder: (ctx, i) {
-        final b = books[i];
-        return GestureDetector(
-          onTap: () => pushToReadingPage(ref, ctx, b),
-          onLongPress: () => _showBookMenu(b),
-          child: Column(children: [
-            BookCover(book: b, height: 150),
-            const SizedBox(height: 4),
-            Text(b.title, maxLines: 2, overflow: TextOverflow.ellipsis,
-                style: Theme.of(ctx).textTheme.bodySmall),
-          ]),
-        );
-      },
-    );
+    return LayoutBuilder(builder: (context, constraints) {
+      const crossAxisSpacing = 12.0;
+      const gridPadding = 40.0; // left 20 + right 20
+      final itemWidth = (constraints.maxWidth - gridPadding - crossAxisSpacing * 2) / 3;
+      // cover 2:3 ratio + title + gap
+      final coverHeight = itemWidth * 3 / 2;
+      final itemHeight = coverHeight + 4 + _kTitleHeight;
+      final aspectRatio = itemWidth / itemHeight;
+
+      return GridView.builder(
+        controller: _scrollController,
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 80),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          childAspectRatio: aspectRatio,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: crossAxisSpacing,
+        ),
+        itemCount: books.length,
+        itemBuilder: (ctx, i) {
+          final b = books[i];
+          return GestureDetector(
+            onTap: () => pushToReadingPage(ref, ctx, b),
+            onLongPress: () => _showBookMenu(b),
+            child: Column(children: [
+              Expanded(
+                child: SizedBox(
+                  width: double.infinity,
+                  child: BookCover(book: b),
+                ),
+              ),
+              const SizedBox(height: 4),
+              SizedBox(
+                height: _kTitleHeight,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: Text(b.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                      style: Theme.of(ctx).textTheme.bodySmall),
+                ),
+              ),
+            ]),
+          );
+        },
+      );
+    });
   }
 
   /// Card with title + horizontal book row (max 4)
@@ -567,26 +641,50 @@ class _SeeAllPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    const titleHeight = 34.0;
+    const crossAxisSpacing = 12.0;
+    const gridPadding = 32.0; // all 16 * 2
     return Scaffold(
       appBar: AppBar(title: Text(title)),
-      body: GridView.builder(
-        padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3, childAspectRatio: 0.55, mainAxisSpacing: 16, crossAxisSpacing: 12),
-        itemCount: books.length,
-        itemBuilder: (ctx, i) {
-          final b = books[i];
-          return GestureDetector(
-            onTap: () => pushToReadingPage(ref, ctx, b),
-            child: Column(children: [
-              BookCover(book: b, height: 150),
-              const SizedBox(height: 4),
-              Text(b.title, maxLines: 2, overflow: TextOverflow.ellipsis,
-                  style: Theme.of(ctx).textTheme.bodySmall),
-            ]),
-          );
-        },
-      ),
+      body: LayoutBuilder(builder: (context, constraints) {
+        final itemWidth = (constraints.maxWidth - gridPadding - crossAxisSpacing * 2) / 3;
+        final coverHeight = itemWidth * 3 / 2;
+        final itemHeight = coverHeight + 4 + titleHeight;
+        final aspectRatio = itemWidth / itemHeight;
+        return GridView.builder(
+          padding: const EdgeInsets.all(16),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            childAspectRatio: aspectRatio,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: crossAxisSpacing,
+          ),
+          itemCount: books.length,
+          itemBuilder: (ctx, i) {
+            final b = books[i];
+            return GestureDetector(
+              onTap: () => pushToReadingPage(ref, ctx, b),
+              child: Column(children: [
+                Expanded(
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: BookCover(book: b),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                SizedBox(
+                  height: titleHeight,
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: Text(b.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                        style: Theme.of(ctx).textTheme.bodySmall),
+                  ),
+                ),
+              ]),
+            );
+          },
+        );
+      }),
     );
   }
 }
