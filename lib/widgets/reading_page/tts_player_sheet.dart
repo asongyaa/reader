@@ -583,7 +583,7 @@ class _TtsPlayerSheetState extends ConsumerState<TtsPlayerSheet> {
   Widget _buildCurrentSentence() {
     final cs = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 28),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       child: ValueListenableBuilder<TtsStateEnum>(
         valueListenable: TtsHandler().ttsStateNotifier,
         builder: (context, ttsState, _) {
@@ -597,60 +597,35 @@ class _TtsPlayerSheetState extends ConsumerState<TtsPlayerSheet> {
   }
 }
 
-/// Polls the JS side for the currently spoken TTS sentence text.
-class _CurrentSentenceText extends StatefulWidget {
+/// Displays the currently spoken TTS sentence text, driven by
+/// [TtsHandler.currentSentenceNotifier] instead of polling the WebView.
+class _CurrentSentenceText extends StatelessWidget {
   const _CurrentSentenceText({required this.cs});
   final ColorScheme cs;
 
   @override
-  State<_CurrentSentenceText> createState() => _CurrentSentenceTextState();
-}
-
-class _CurrentSentenceTextState extends State<_CurrentSentenceText> {
-  String _sentence = '';
-  Timer? _timer;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchSentence();
-    _timer = Timer.periodic(const Duration(milliseconds: 500), (_) => _fetchSentence());
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _fetchSentence() async {
-    final state = epubPlayerKey.currentState;
-    if (state == null) return;
-    try {
-      final detail = await state.ttsCurrentDetail();
-      if (!mounted) return;
-      final text = detail?.text ?? '';
-      if (text != _sentence) {
-        setState(() => _sentence = text);
-      }
-    } catch (_) {}
-  }
-
-  @override
   Widget build(BuildContext context) {
-    if (_sentence.isEmpty) return const SizedBox.shrink();
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 80),
-      child: Text(
-        _sentence,
-        maxLines: 4,
-        overflow: TextOverflow.ellipsis,
-        textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: widget.cs.onSurfaceVariant,
-              height: 1.5,
+    return ValueListenableBuilder<String?>(
+      valueListenable: TtsHandler().currentSentenceNotifier,
+      builder: (context, sentence, _) {
+        if (sentence == null || sentence.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 96),
+          child: Text(
+            sentence,
+            maxLines: 5,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              color: cs.onSurface,
+              height: 1.8,
+              letterSpacing: 0.5,
             ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

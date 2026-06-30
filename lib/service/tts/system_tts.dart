@@ -34,6 +34,10 @@ class SystemTts extends BaseTts {
       ValueNotifier<TtsStateEnum>(TtsStateEnum.stopped);
 
   @override
+  final ValueNotifier<String?> currentSentenceNotifier =
+      ValueNotifier<String?>(null);
+
+  @override
   void updateTtsState(TtsStateEnum newState) {
     ttsStateNotifier.value = newState;
   }

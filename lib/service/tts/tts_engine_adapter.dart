@@ -25,6 +25,7 @@ class TtsEngineAdapter extends BaseTts {
   String? _currentVoiceText;
 
   /// Notifies UI when the currently spoken sentence changes.
+  @override
   final ValueNotifier<String?> currentSentenceNotifier = ValueNotifier(null);
 
   @override

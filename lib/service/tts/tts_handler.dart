@@ -175,9 +175,9 @@ class TtsHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
 
   ValueNotifier<TtsStateEnum> get ttsStateNotifier => tts.ttsStateNotifier;
 
-  /// The currently spoken sentence text, updated in real time.
-  final ValueNotifier<String?> currentSentenceNotifier =
-      ValueNotifier(null);
+  /// The currently spoken sentence text, updated in real time. Delegates to the
+  /// underlying engine so the UI reacts to sentence changes without polling.
+  ValueNotifier<String?> get currentSentenceNotifier =>      tts.currentSentenceNotifier;
 
   bool get isPlaying => tts.isPlaying;
 

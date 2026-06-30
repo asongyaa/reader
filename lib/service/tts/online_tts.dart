@@ -38,6 +38,11 @@ class OnlineTts extends BaseTts {
   TtsSegment? _currentSegment;
   String? _currentVoiceText;
   int _audioFetchVersion = 0; // Version counter for audio fetches
+
+  /// Notifies UI when the currently spoken sentence changes.
+  @override
+  final ValueNotifier<String?> currentSentenceNotifier =
+      ValueNotifier(null);
   // ============ Prefetcher State ============
   bool _isPrefetcherRunning = false;
   Completer<void>? _prefetcherCompleter;
@@ -119,6 +124,11 @@ class OnlineTts extends BaseTts {
   @override
   String? get currentVoiceText => _currentVoiceText;
 
+  void _setCurrentSentence(String? text) {
+    _currentVoiceText = text;
+    currentSentenceNotifier.value = text;
+  }
+
   @override
   Future<List<TtsVoice>> getVoices() async {
     return await backend.getVoices();
@@ -170,7 +180,7 @@ class OnlineTts extends BaseTts {
     _buffer.clear();
     _bufferKeys.clear();
     _currentSegment = null;
-    _currentVoiceText = null;
+    _setCurrentSentence(null);
   }
 
   /// Clear audio for all pending segments (not currently playing)
@@ -370,15 +380,19 @@ class OnlineTts extends BaseTts {
         // Now remove it from buffer
         _buffer.removeAt(0);
         _currentSegment = segment;
-        _currentVoiceText = segment.sentence.text;
+        _setCurrentSentence(segment.sentence.text);
 
-        // Highlight current sentence
+        // Highlight current sentence.
+        // The first sentence is already highlighted by ttsHere(); every
+        // subsequent sentence is highlighted as a side effect of ttsNext()
+        // (called below after the previous sentence finished), so we don't
+        // need to highlight here. See _highlightSegment for details.
         await _highlightSegment(segment);
 
         // Handle silent segment
         if (segment.isSilent) {
           await Future.delayed(const Duration(milliseconds: 100));
-          await getNextTextFunction();
+          await _safeAdvanceReader();
           _currentSegment = null;
           continue;
         }
@@ -397,9 +411,13 @@ class OnlineTts extends BaseTts {
         _playbackCompleter = null;
         _currentSegment = null;
 
-        // Advance reader position
+        // Advance the reader cursor AFTER the current sentence finished
+        // playing. ttsNext() highlights the next sentence as a side effect, so
+        // doing it here keeps the highlight in sync with the audio that is
+        // about to play next, and lets the prefetcher collect further-ahead
+        // sentences while the next one plays.
         if (!_shouldStop) {
-          await getNextTextFunction();
+          await _safeAdvanceReader();
         }
       }
     } catch (e) {
@@ -411,13 +429,27 @@ class OnlineTts extends BaseTts {
     }
   }
 
-  Future<void> _highlightSegment(TtsSegment segment) async {
-    final state = epubPlayerKey.currentState;
-    final cfi = segment.sentence.cfi;
-    if (state == null || cfi == null || cfi.isEmpty) return;
+  // Note: we intentionally do NOT call ttsHighlightByCfi here. Highlighting is
+  // already performed on the JS side by ttsHere() (first sentence) and ttsNext()
+  // (every subsequent sentence, since ttsNext passes paused=true). Highlighting
+  // again here would re-resolve the range by scanning every block and computing
+  // a CFI for each (O(n) per sentence), which blocks the player loop for
+  // several seconds on long chapters and causes the long inter-sentence gaps.
+  Future<void> _highlightSegment(TtsSegment segment) async {}
+
+
+  /// Advance the reader cursor to the next sentence.
+  ///
+  /// The prefetcher peeks ahead with a fixed offset and does NOT move the
+  /// iterator on its own, so it can only collect new sentences after the
+  /// player advances the cursor here. Errors are swallowed so a transient JS
+  /// failure never breaks the playback loop.
+  Future<void> _safeAdvanceReader() async {
     try {
-      await state.ttsHighlightByCfi(cfi);
-    } catch (_) {}
+      await getNextTextFunction();
+    } catch (e) {
+      AnxLog.severe('Advance reader error: $e');
+    }
   }
 
   // ============ Public API ============
@@ -426,12 +458,21 @@ class OnlineTts extends BaseTts {
     _shouldStop = false;
     updateTtsState(TtsStateEnum.playing);
 
-    // Sync to current location first
-    try {
-      await getHereFunction();
-    } catch (_) {}
+    // Sync the reader to the current location while warming up the audio
+    // player in parallel. The two have no dependency on each other, so running
+    // them concurrently shaves the AudioPlayer init time off the start latency.
+    await Future.wait([
+      _ensurePlayer(),
+      Future(() async {
+        try {
+          await getHereFunction();
+        } catch (_) {}
+      }),
+    ]);
 
-    // Start both loops
+    // Start both loops. The prefetcher collects the current sentence first
+    // (includeCurrent) and fetches audio in the background; the player loop
+    // waits until the first segment's audio is ready before playing.
     unawaited(_startPrefetcher());
     await _startPlayer();
   }

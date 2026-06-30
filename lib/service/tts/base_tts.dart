@@ -40,6 +40,9 @@ abstract class BaseTts {
 
   String? get currentVoiceText;
 
+  /// Notifies UI when the currently spoken sentence changes.
+  ValueNotifier<String?> get currentSentenceNotifier;
+
   Future<List<TtsVoice>> getVoices();
 
   /// Select a voice by [voiceId] (engine-specific identifier).
