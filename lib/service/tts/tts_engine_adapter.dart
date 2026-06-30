@@ -22,6 +22,11 @@ class TtsEngineAdapter extends BaseTts {
   Function? getNextTextFunction;
   Function? getPrevTextFunction;
 
+  String? _currentVoiceText;
+
+  /// Notifies UI when the currently spoken sentence changes.
+  final ValueNotifier<String?> currentSentenceNotifier = ValueNotifier(null);
+
   @override
   final ValueNotifier<TtsStateEnum> ttsStateNotifier =
       ValueNotifier<TtsStateEnum>(TtsStateEnum.stopped);
@@ -35,7 +40,12 @@ class TtsEngineAdapter extends BaseTts {
   bool get isPlaying => ttsStateNotifier.value == TtsStateEnum.playing;
 
   @override
-  String? get currentVoiceText => null;
+  String? get currentVoiceText => _currentVoiceText;
+
+  void _setCurrentText(String? text) {
+    _currentVoiceText = text;
+    currentSentenceNotifier.value = text;
+  }
 
   @override
   double get volume => 1.0;
@@ -92,6 +102,7 @@ class TtsEngineAdapter extends BaseTts {
   Future<void> speak({String? content}) async {
     updateTtsState(TtsStateEnum.playing);
     if (content != null && content.isNotEmpty) {
+      _setCurrentText(content);
       await _engine.speak(content);
       // 单句试听完成后重置状态，避免污染全局阅读页状态
       if (ttsStateNotifier.value == TtsStateEnum.playing) {
@@ -117,6 +128,7 @@ class TtsEngineAdapter extends BaseTts {
       return;
     }
 
+    _setCurrentText(text);
     await _engine.speak(text);
 
     if (_engine.autoChainsSentences) return;
@@ -133,6 +145,7 @@ class TtsEngineAdapter extends BaseTts {
       }
       if (next == null || next.isEmpty) break;
       if (ttsStateNotifier.value != TtsStateEnum.playing) break;
+      _setCurrentText(next);
       await _engine.speak(next);
     }
   }
@@ -140,6 +153,7 @@ class TtsEngineAdapter extends BaseTts {
   @override
   Future<dynamic> stop() async {
     updateTtsState(TtsStateEnum.stopped);
+    _setCurrentText(null);
     await _engine.stop();
     return 0;
   }
@@ -160,11 +174,15 @@ class TtsEngineAdapter extends BaseTts {
         final result = await getHereFunction!();
         if (result is String && result.isNotEmpty) current = result;
       } catch (_) {}
-      if (current != null) await _engine.speak(current);
+      if (current != null) {
+        _setCurrentText(current);
+        await _engine.speak(current);
+      }
       // 继续链式播放
       while (ttsStateNotifier.value == TtsStateEnum.playing) {
         final result = await getNextTextFunction!();
         if (result is! String || result.isEmpty) break;
+        _setCurrentText(result);
         await _engine.speak(result);
       }
     } else {
@@ -174,21 +192,25 @@ class TtsEngineAdapter extends BaseTts {
 
   @override
   Future<void> prev() async {
-    await stop();
+    await _engine.stop();
     if (getPrevTextFunction == null) return;
     final text = await getPrevTextFunction!();
-    if (text is String) {
-      await speak(content: text);
+    if (text is String && text.isNotEmpty) {
+      _setCurrentText(text);
+      updateTtsState(TtsStateEnum.playing);
+      await _engine.speak(text);
     }
   }
 
   @override
   Future<void> next() async {
-    await stop();
+    await _engine.stop();
     if (getNextTextFunction == null) return;
     final text = await getNextTextFunction!();
-    if (text is String) {
-      await speak(content: text);
+    if (text is String && text.isNotEmpty) {
+      _setCurrentText(text);
+      updateTtsState(TtsStateEnum.playing);
+      await _engine.speak(text);
     }
   }
 

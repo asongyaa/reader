@@ -142,8 +142,33 @@ class EpubPlayerState extends ConsumerState<EpubPlayer>
 
   Future<void> goToPercentage(double value) async {
     await webViewController.evaluateJavascript(source: '''
-      goToPercent($value); 
+      goToPercent($value);
       ''');
+  }
+
+  /// Jump to a fraction within the current chapter (0.0–1.0).
+  ///
+  /// Maps a chapter-local fraction to the global fraction by reading
+  /// sectionFractions from JS, then calls the existing [goToPercent].
+  Future<void> goToChapterFraction(double value) async {
+    final result = await webViewController.callAsyncJavaScript(functionBody: '''
+      const index = reader.view.lastLocation?.section?.current;
+      const fractions = reader.view.getSectionFractions();
+      if (index == null || !fractions || fractions.length === 0) {
+        return {fallback: true, value: $value};
+      }
+      const startFrac = fractions[index]?.fraction ?? 0;
+      const endFrac = (index + 1 < fractions.length) ? fractions[index + 1].fraction : 1;
+      const targetFrac = startFrac + (endFrac - startFrac) * $value;
+      return {fallback: false, value: targetFrac};
+    ''');
+    final targetValue = result?.value;
+    if (targetValue is Map) {
+      await goToPercentage((targetValue['value'] as num).toDouble());
+    } else {
+      // fallback: treat value as global fraction
+      await goToPercentage(value);
+    }
   }
 
   void setSelectionClearLocked(bool locked) {

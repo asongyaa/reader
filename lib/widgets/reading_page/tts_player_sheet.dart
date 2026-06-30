@@ -93,12 +93,12 @@ class _TtsPlayerSheetState extends ConsumerState<TtsPlayerSheet> {
   Widget _buildCover(CurrentReadingState currentReading) {
     final book = currentReading.book;
     if (book == null) {
-      return const SizedBox(height: 220, width: 155);
+      return const SizedBox(height: 180, width: 126);
     }
     return BookCover(
       book: book,
-      height: 220,
-      width: 155,
+      height: 180,
+      width: 126,
       radius: 12,
     );
   }
@@ -379,28 +379,18 @@ class _TtsPlayerSheetState extends ConsumerState<TtsPlayerSheet> {
   }
 
   Widget _buildProgressBar(CurrentReadingState currentReading) {
-    final progress = (currentReading.percentage ?? 0.0).clamp(0.0, 1.0);
     final chapter = currentReading.chapterTitle ?? '';
+    final currentPage = currentReading.chapterCurrentPage ?? 0;
+    final totalPages = currentReading.chapterTotalPages ?? 0;
+    final progress = totalPages > 0
+        ? (currentPage / totalPages).clamp(0.0, 1.0)
+        : 0.0;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 3,
-              backgroundColor:
-                  Theme.of(context).colorScheme.surfaceContainerHighest,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                Theme.of(context).colorScheme.primary,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 '${(progress * 100).toStringAsFixed(1)}%',
@@ -408,18 +398,37 @@ class _TtsPlayerSheetState extends ConsumerState<TtsPlayerSheet> {
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
               ),
-              Expanded(
-                child: Text(
-                  chapter,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.end,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                ),
+              const Spacer(),
+              Text(
+                chapter,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
               ),
             ],
+          ),
+          SizedBox(
+            height: 20,
+            child: SliderTheme(
+              data: SliderThemeData(
+                trackHeight: 3,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+              ),
+              child: Slider(
+                value: progress,
+                onChanged: (value) async {
+                  final state = epubPlayerKey.currentState;
+                  if (state != null) {
+                    await state.goToChapterFraction(value);
+                    await TtsHandler().stop();
+                    await TtsHandler().play();
+                  }
+                },
+              ),
+            ),
           ),
         ],
       ),
@@ -446,17 +455,16 @@ class _TtsPlayerSheetState extends ConsumerState<TtsPlayerSheet> {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           controlButton(
             icon: EvaIcons.arrowhead_left,
             onPressed: () async {
-              audioHandler.stop();
               final state = epubPlayerKey.currentState;
               if (state != null) await state.ttsPrevSection();
-              TtsHandler().playPrevious();
+              await TtsHandler().playPrevious();
             },
             tooltip: '上一章',
           ),
@@ -499,10 +507,9 @@ class _TtsPlayerSheetState extends ConsumerState<TtsPlayerSheet> {
           controlButton(
             icon: EvaIcons.arrowhead_right,
             onPressed: () async {
-              audioHandler.stop();
               final state = epubPlayerKey.currentState;
               if (state != null) await state.ttsNextSection();
-              TtsHandler().playNext();
+              await TtsHandler().playNext();
             },
             tooltip: '下一章',
           ),
@@ -526,28 +533,124 @@ class _TtsPlayerSheetState extends ConsumerState<TtsPlayerSheet> {
           children: [
             _buildDragHandle(),
             _buildHeader(),
+            // 三等分布局：上-书信息 / 中-句子 / 下-控件
             Flexible(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.only(bottom: bottomPadding + 16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SizedBox(height: 8),
-                    _buildCover(currentReading),
-                    const SizedBox(height: 20),
-                    _buildBookInfo(currentReading),
-                    const SizedBox(height: 20),
-                    _buildProgressBar(currentReading),
-                    const SizedBox(height: 12),
-                    _buildMainControls(isPlaying),
-                    _buildQuickActions(),
-                  ],
-                ),
+              child: Column(
+                children: [
+                  // ── 上：封面 + 书名 + 章节（1/3）──
+                  Expanded(
+                    flex: 1,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _buildCover(currentReading),
+                        _buildBookInfo(currentReading),
+                      ],
+                    ),
+                  ),
+                  // ── 中：当前朗读句子（1/3）──
+                  Expanded(
+                    flex: 1,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildCurrentSentence(),
+                      ],
+                    ),
+                  ),
+                  // ── 下：进度条 + 快捷操作 + 播放控制（1/3）──
+                  Expanded(
+                    flex: 1,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _buildProgressBar(currentReading),
+                        _buildQuickActions(),
+                        _buildMainControls(isPlaying),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
+            SizedBox(height: bottomPadding + 12),
           ],
         );
       },
+    );
+  }
+
+  Widget _buildCurrentSentence() {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 28),
+      child: ValueListenableBuilder<TtsStateEnum>(
+        valueListenable: TtsHandler().ttsStateNotifier,
+        builder: (context, ttsState, _) {
+          if (ttsState != TtsStateEnum.playing) {
+            return const SizedBox.shrink();
+          }
+          return _CurrentSentenceText(cs: cs);
+        },
+      ),
+    );
+  }
+}
+
+/// Polls the JS side for the currently spoken TTS sentence text.
+class _CurrentSentenceText extends StatefulWidget {
+  const _CurrentSentenceText({required this.cs});
+  final ColorScheme cs;
+
+  @override
+  State<_CurrentSentenceText> createState() => _CurrentSentenceTextState();
+}
+
+class _CurrentSentenceTextState extends State<_CurrentSentenceText> {
+  String _sentence = '';
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchSentence();
+    _timer = Timer.periodic(const Duration(milliseconds: 500), (_) => _fetchSentence());
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchSentence() async {
+    final state = epubPlayerKey.currentState;
+    if (state == null) return;
+    try {
+      final detail = await state.ttsCurrentDetail();
+      if (!mounted) return;
+      final text = detail?.text ?? '';
+      if (text != _sentence) {
+        setState(() => _sentence = text);
+      }
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_sentence.isEmpty) return const SizedBox.shrink();
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 80),
+      child: Text(
+        _sentence,
+        maxLines: 4,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: widget.cs.onSurfaceVariant,
+              height: 1.5,
+            ),
+      ),
     );
   }
 }

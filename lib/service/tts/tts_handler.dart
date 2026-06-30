@@ -1,6 +1,7 @@
 import 'package:anx_reader/config/shared_preference_provider.dart';
 import 'package:anx_reader/page/reading_page.dart';
 import 'package:anx_reader/service/tts/base_tts.dart';
+import 'package:anx_reader/service/tts/tts_engine_adapter.dart';
 import 'package:anx_reader/service/tts/tts_factory.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
@@ -149,6 +150,7 @@ class TtsHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     ));
 
     tts.updateTtsState(TtsStateEnum.stopped);
+    currentSentenceNotifier.value = null;
     await tts.stop();
     epubPlayerKey.currentState?.ttsStop();
   }
@@ -172,6 +174,10 @@ class TtsHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   ValueNotifier<TtsStateEnum> get ttsStateNotifier => tts.ttsStateNotifier;
+
+  /// The currently spoken sentence text, updated in real time.
+  final ValueNotifier<String?> currentSentenceNotifier =
+      ValueNotifier(null);
 
   bool get isPlaying => tts.isPlaying;
 
